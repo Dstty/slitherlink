@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>鏁板洖 路 姣忔棩涓€棰?/title>
+<style>
+  :root {
+    --bg: #eef1f6; --panel: #fff; --ink: #1f2937; --muted: #6b7280;
+    --line: #2563eb; --cross: #9ca3af; --dot: #334155; --dual: #fbfcfe;
+    --ok: #059669; --bad: #dc2626; --warn: #d97706;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; min-height: 100vh; background: radial-gradient(1200px 600px at 50% -10%, #fff 0%, var(--bg) 60%);
+    color: var(--ink); font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center; padding: 20px 14px 36px; }
+  h1 { font-size: 20px; margin: 0 0 2px; letter-spacing: .03em; }
+  .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 14px; text-align: center; }
+  .panel { background: var(--panel); border-radius: 16px; padding: 14px;
+    box-shadow: 0 10px 30px rgba(15,23,42,.08), 0 1px 2px rgba(15,23,42,.06); width: min(720px, 100%); }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+  .bar b { color: var(--ink); }
+  button { font: inherit; padding: 7px 14px; border-radius: 9px; border: 1px solid #d1d5db;
+    background: #fff; color: var(--ink); cursor: pointer; transition: .15s; }
+  button:hover { border-color: #9ca3af; }
+  button.primary { background: var(--line); border-color: var(--line); color: #fff; font-weight: 600; }
+  /* 妯″紡鍒囨崲 */
+  .modes { display: inline-flex; background: #eef1f6; border-radius: 10px; padding: 2px; gap: 2px; }
+  .modes button { padding: 4px 12px; border: 0; background: transparent; color: var(--muted);
+    border-radius: 8px; font-size: 13px; }
+  .modes button:hover { background: #e2e8f0; }
+  .modes button.on { background: #fff; color: var(--line); font-weight: 700;
+    box-shadow: 0 1px 3px rgba(15,23,42,.12); }
+  #clock { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+  .stage { display: flex; justify-content: center; }
+  /* 瓒ｅ懗妯″紡锛氭妸褰撳ぉ閭ｄ釜瀛楀啓澶т竴鐐癸紝鏀惧湪妫嬬洏涓婃柟 */
+  .target { display: none; align-items: center; justify-content: center;
+    margin: 0 0 12px; }
+  .target.on { display: flex; }
+  .target .glyph { font-size: 40px; line-height: 1; font-weight: 700; color: var(--line);
+    background: #eff4ff; border: 1px solid #dbe6ff; border-radius: 14px;
+    padding: 6px 16px 10px; }
+  /* 鍙湁鐪熸鐨勬鐩樻墠绂佺敤娴忚鍣ㄦ墜鍔匡紙鐢荤嚎瑕佺敤鎵嬪娍锛夛紱甯姪閲岀殑灏忓浘蹇呴』鏀捐锛屽惁鍒欏垝涓嶅姩 */
+  #board { touch-action: none; user-select: none; -webkit-user-select: none;
+           cursor: crosshair; display: block; }
+  .figs svg { display: block; pointer-events: none; touch-action: auto; }
+  .frame { fill: none; stroke: #e2e6ee; stroke-width: 1.4; stroke-dasharray: 7 6; }
+  .dgrid { stroke: var(--dual); stroke-linecap: round; }
+  .hotdot { fill: var(--line); }
+  g.edge-item .edge { stroke: transparent; stroke-linecap: round; }
+  g.edge-item .cross { display: none; }
+  g.edge-item .cross line { stroke: var(--cross); stroke-linecap: round; }
+  g.edge-item.s1 .edge { stroke: var(--line); }
+  g.edge-item.s2 .cross { display: block; }
+  .clue { font-weight: 700; fill: #111827; text-anchor: middle; dominant-baseline: central;
+    pointer-events: none; paint-order: stroke; stroke: #fff; stroke-linejoin: round; transition: fill .12s; }
+  .clue.under { fill: var(--warn); }
+  .clue.ok    { fill: var(--ok); }
+  .clue.over  { fill: var(--bad); }
+  .dot { fill: var(--dot); pointer-events: none; }
+  .legend { display: flex; gap: 16px; justify-content: center; align-items: center; margin-top: 10px; font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
+  .legend i { font-style: normal; font-weight: 700; margin-right: 4px; }
+  kbd { background: #f3f4f6; border: 1px solid #d1d5db; border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; font-size: 11.5px; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #cbd5e1; border-top-color: var(--line);
+    border-radius: 50%; animation: r .7s linear infinite; vertical-align: -1px; margin-right: 6px; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  /* 寮圭獥 */
+  .mask { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none;
+    z-index: 50; padding: 16px; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .mask.show { display: block; }
+  .modal { background: #fff; border-radius: 18px; padding: 22px; width: min(420px, 100%);
+    margin: 12vh auto; text-align: center; box-shadow: 0 24px 60px rgba(15,23,42,.3);
+    animation: pop .25s ease-out; }
+  @keyframes pop { from { transform: scale(.9); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+  .modal h2 { margin: 0 0 6px; font-size: 19px; }
+  .modal .big { font-size: 40px; margin: 4px 0 8px; }
+  .modal .meta { color: var(--muted); font-size: 13px; margin-bottom: 14px; line-height: 1.8; }
+  .modal .meta b { color: var(--ink); }
+  .sharetext { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px;
+    font-size: 12.5px; text-align: left; white-space: pre-wrap; color: #334155; margin-bottom: 14px; }
+  .row { display: flex; gap: 10px; justify-content: center; }
+  #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; display: none; }
+  /* 甯姪 */
+  .modal.help { width: min(700px, 100%); margin: 3vh auto; text-align: left;
+    transform: translateZ(0); }   /* 鍗曠嫭鍚堟垚灞傦細鎵嬫満涓婃粴鍔ㄦ洿椤?*/
+  .modal.help h2 { text-align: center; margin-bottom: 4px; }
+  .modal.help h3 { font-size: 14px; margin: 16px 0 8px; color: #111827; }
+  .modal.help p { font-size: 13px; color: #374151; margin: 6px 0; }
+  .figs { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
+  .figs figure { margin: 0; text-align: center; }
+  .figs figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; max-width: 190px; line-height: 1.5; }
+  .help-edge { stroke: var(--line); stroke-linecap: round; }
+  .toast { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
+    background: #111827; color: #fff; padding: 9px 16px; border-radius: 10px; font-size: 13px;
+    opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 70; }
+  .toast.show { opacity: .92; }
+</style>
+</head>
+<body>
+  <h1>鏁板洖 路 姣忔棩涓€棰?/h1>
+  <div class="sub" id="sub">姝ｅ湪杞藉叆浠婂ぉ鐨勯鐩€?/div>
+
+  <div class="panel">
+    <div class="bar">
+      <span class="modes" id="modes">
+        <button class="on" data-mode="normal">鏅€?/button>
+        <button data-mode="fun">瓒ｅ懗</button>
+      </span>
+      <span>棰樺彿 <b id="no">鈥?/b></span>
+      <span id="date">鈥?/span>
+      <span id="info"></span>
+      <button id="helpBtn" style="padding:3px 10px">甯姪</button>
+      <button id="shareBtn" style="display:none;padding:3px 10px">鍒嗕韩鎴愮哗</button>
+      <span id="clock">0:00</span>
+    </div>
+    <div class="target" id="target">
+      <span class="glyph" id="glyph">鈥?/span>
+    </div>
+    <div class="stage"><svg id="board"></svg></div>
+    <div class="legend">
+      <span><i style="color:var(--warn)">姗?/i>绾垮皯浜?/span>
+      <span><i style="color:var(--ok)">缁?/i>鍒氬ソ</span>
+      <span><i style="color:var(--bad)">绾?/i>绾垮浜?/span>
+      <span><button id="clear" style="padding:2px 10px;margin-left:4px">娓呯┖閲嶆潵</button></span>
+    </div>
+  </div>
+
+  <div class="mask" id="helpMask">
+    <div class="modal help">
+      <h2>鏁板洖鎬庝箞鐜?/h2>
+      <p>鎶婃牸瀛愰噷鐨勬暟瀛楀叏閮ㄦ弧瓒筹紝<b>骞朵笖绾胯繛鎴愪竴鏉￠棴鍚堛€佷笉浜ゅ弶銆佷笉鍒嗗弶鐨勭幆</b>锛屾墠绠楀畬鎴愩€?/p>
+
+      <h3>鈶?鍏堣璇嗘暟瀛楋細鏁板瓧锛濊繖涓牸瀛愬洓鏉¤竟閲岀敾浜嗗嚑鏉?/h3>
+      <div class="figs">
+        <figure><div id="hd0"></div><figcaption>鍐欑潃 <b>0</b>锛氬洓鏉¤竟涓€鏉￠兘涓嶇敾</figcaption></figure>
+        <figure><div id="hd1"></div><figcaption>鍐欑潃 <b>1</b>锛氬洓鏉¤竟閲岀敾 1 鏉?/figcaption></figure>
+        <figure><div id="hd2"></div><figcaption>鍐欑潃 <b>2</b>锛氬洓鏉¤竟閲岀敾 2 鏉?/figcaption></figure>
+        <figure><div id="hd3"></div><figcaption>鍐欑潃 <b>3</b>锛氬洓鏉¤竟閲岀敾 3 鏉?/figcaption></figure>
+      </div>
+      <p>娌℃湁鏁板瓧鐨勬牸瀛愪笉鍙楅檺鍒躲€傛暟瀛楅鑹蹭細瀹炴椂鎻愮ず锛?        <span style="color:var(--warn)">姗?/span>锛濊繖涓牸瀛愮殑绾垮お灏戜簡 路
+        <span style="color:var(--ok)">缁?/span>锛濆垰濂?路 <span style="color:var(--bad)">绾?/span>锛濈嚎澶浜?/p>
+
+      <h3>鈶?鍐嶈璇嗙幆锛氬繀椤绘槸涓€鏉￠棴鍚堛€佷笉浜ゅ弶銆佷笉鍒嗗弶鐨勭幆</h3>
+      <p>涓嬮潰浜斿紶鍥炬槸<b>鍚屼竴涓?5脳5 鐩橀潰</b>锛屽彧鏈夌嚎涓嶄竴鏍?鈥斺€?娉ㄦ剰鐪嬶細
+        <b>鍚庡洓寮犻敊鐨勫浘锛? 涓暟瀛椾篃鍏ㄦ槸缁跨殑</b>锛屽厜瀵规暟瀛楁槸涓嶅鐨勩€?/p>
+      <div class="figs">
+        <figure><div id="hx_ok"></div>
+          <figcaption>鉁?<b>姝ｇ‘</b>锛氫竴鏉￠棴鍚堢殑鐜紝9 涓暟瀛楀叏瀵逛笂</figcaption></figure>
+        <figure><div id="hx_two"></div>
+          <figcaption>鉂?<b>鍒嗘垚涓や釜鐜?/b>锛氬繀椤绘槸<b>涓€鏉?/b>锛堣繖寮犳槸 1 涓皬鐜?+ 1 涓ぇ鐜級</figcaption></figure>
+        <figure><div id="hx_fork"></div>
+          <figcaption>鉂?<b>绾垮垎鍙?/b>锛氫竴涓偣涓婃帴浜嗕笁/鍥涙潯绾匡紙姣忎釜鐐规渶澶氫袱鏉★級</figcaption></figure>
+        <figure><div id="hx_broken"></div>
+          <figcaption>鉂?<b>鏈夋柇澶?/b>锛氱嚎鏈夌鐐癸紝鎺ヤ笉鎴愪竴涓幆</figcaption></figure>
+        <figure><div id="hx_cross"></div>
+          <figcaption>鉂?<b>鑷繁浜ゅ弶</b>锛氱幆鍦ㄥ悓涓€涓偣涓婄┛杩囧幓涓ゆ锛岃嚜浜や簡</figcaption></figure>
+      </div>
+
+      <h3>鈶?鎬庝箞鎿嶄綔</h3>
+      <p>
+        路 <b>鐢荤嚎</b>锛氫粠涓€涓牸瀛愪腑蹇?b>鎷?/b>鍒扮浉閭绘牸瀛愪腑蹇冿紝涓ょ偣涔嬮棿灏辫繛涓婁簡锛涘啀鎷栦竴閬嶅氨鎿︽帀<br>
+        路 <b>鎵撳弶</b>锛?b>鐐?/b>閭ｄ竴鏉¤竟鍗冲彲锛堢數鑴戜篃鍙互<b>鍙抽敭</b>鐐规垨鎸変綇鎷栵紝鎵嬫満<b>闀挎寜</b>锛?br>
+        路 鎵撳弶鍙槸鏍囪銆岃繖鏉′竴瀹氫笉鐢汇€嶏紝甯綘鎺掗櫎锛屼笉绠楅敊
+      </p>
+
+      <div class="row" style="margin-top:16px">
+        <button class="primary" id="helpClose">鐭ラ亾浜嗭紝寮€濮嬬帺</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mask" id="funMask">
+    <div class="modal help">
+      <h2>瓒ｅ懗妯″紡鎬庝箞鐜?/h2>
+      <p><b>鏁板瓧瑙勫垯鍜屾櫘閫氭ā寮忓畬鍏ㄤ竴鏍?/b>锛氭暟瀛楋紳杩欎釜鏍煎瓙鍥涙潯杈圭敾浜嗗嚑鏉°€?        涓嶄竴鏍风殑鍙湁鏈€鍚庝竴姝?鈥斺€?绾胯鐢绘垚<b>鍜屽綋澶╅偅涓瓧鍚屾瀯鐨勫浘褰?/b>銆?/p>
+      <p>銆屽悓鏋勩€嶅彧鐪嬩笁浠朵簨锛?b>鍒嗗嚑绗?路 鍦ㄥ摢鍒嗗弶 路 鎴愪笉鎴愬湀</b>銆?        鐢诲澶с€佺敾鍦ㄥ摢銆佹€庝箞鎷愬集閮介殢渚裤€?/p>
+
+      <h3>鍚屾牱绠椼€屾棩銆嶏細涓€涓幆 + 涓€鏉℃潬锛屽舰鐘堕殢渚?/h3>
+      <div class="figs">
+        <figure><div id="fy_ok1"></div><figcaption>鉁?涓€涓幆 + 涓€鏉℃潬</figcaption></figure>
+        <figure><div id="fy_ok2"></div><figcaption>鉁?鎹竴绉嶅畬鍏ㄤ笉鍚岀殑褰㈢姸锛岀収鏍锋槸銆岀幆 + 涓€鏉℃潬銆?/figcaption></figure>
+      </div>
+
+      <h3>杩欎袱绉嶄笉绠椼€屾棩銆?/h3>
+      <div class="figs">
+        <figure><div id="fy_bad1"></div><figcaption>鉂?鍙湁涓€鏉＄幆锛屾病鏈夋潬锛堝皯涓€涓笁宀旂偣锛?/figcaption></figure>
+        <figure><div id="fy_bad2"></div><figcaption>鉂?鏂垚浜掍笉鐩歌繛鐨勪袱绗旓紙鍒嗘垚涓ゅ潡浜嗭級</figcaption></figure>
+      </div>
+
+      <h3>鎿嶄綔</h3>
+      <p>
+        路 <b>鐢荤嚎</b>锛氫粠涓€涓牸瀛愪腑蹇?b>鎷?/b>鍒扮浉閭绘牸瀛愪腑蹇冿紙鍐嶆嫋涓€閬嶏紳鎿︽帀锛夛紱<b>鎵撳弶</b>锛?b>鐐?/b>閭ｆ潯杈?br>
+        路 鏁板瓧棰滆壊锛氭锛濊繖涓牸瀛愮殑绾垮皯浜?路 缁匡紳鍒氬ソ 路 绾紳澶氫簡
+      </p>
+
+      <div class="row" style="margin-top:16px">
+        <button class="primary" id="funHelpClose">鐭ラ亾浜嗭紝寮€濮嬬帺</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mask" id="mask">
+    <div class="modal">
+      <div class="big">馃帀</div>
+      <h2>瀹屾垚浠婃棩棰樼洰锛?/h2>
+      <div class="meta" id="modalMeta"></div>
+      <div class="sharetext" id="shareText"></div>
+      <div class="row">
+        <button class="primary" id="share">鍒嗕韩</button>
+        <button id="closeModal">鍏抽棴</button>
+      </div>
+    </div>
+  </div>
+  <canvas id="confetti"></canvas>
+  <div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var NS = 'http://www.w3.org/2000/svg';
+  // 鎺ュ彛鍦板潃锛氳嚜宸辨湇鍔″櫒涓婃槸鍚屾簮鐩稿璺緞锛涙斁鍒?GitHub Pages锛坔ttps锛変笂鏃讹紝
+  // 鍚屾簮閭ｆ潯浼?404锛堣€屼笖鏄?http 娣峰悎鍐呭浼氳鎷︼級锛屼簬鏄嚜鍔ㄥ垏鍒?HTTPS 閭ｆ潯闅ч亾銆?  var API_BASES = [
+    '/slitherlink/api/',
+    'https://sacramento-divided-makers-gage.trycloudflare.com/slitherlink/api/'
+  ];
+  var API = API_BASES[0];
+  var svg = document.getElementById('board');
+  var mask = document.getElementById('mask');
+  var toastEl = document.getElementById('toast');
+
+  var R = 10, C = 10, nh = (R + 1) * C, E = nh + R * (C + 1);
+  var clue = {}, clueNodes = {}, user = null, board = null;
+  var edgeNodes = [], hotDotEl = null;
+  var geom = { S: 40, M: 30, W: 500, H: 500, pts: [] };
+  var painting = false, dragFrom = -1, strokeMode = null, mode = 'line';
+  var downPt = null, movedFar = false, longPressed = false, pressTimer = null, lastPtrType = 'mouse';
+  var solved = false, checking = false;
+  var meta = null, elapsedDone = 0;
+  var puzzleMode = 'normal';                    // normal 鏅€?/ fun 瓒ｅ懗
+  var elapsedMs = 0, running = false, runFrom = 0, started = false;
+
+  function el(t, a) { var e = document.createElementNS(NS, t); for (var k in a) e.setAttribute(k, a[k]); return e; }
+  function toast(msg) { toastEl.textContent = msg; toastEl.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(function () { toastEl.classList.remove('show'); }, 1800); }
+
+  /** 鍒嗕韩鐢ㄧ殑鍦板潃锛氬氨鏄?褰撳墠杩欎釜椤甸潰"鐨勫湴鍧€锛堝幓鎺夋煡璇覆锛夆€斺€?   *  鍦ㄦ湇鍔″櫒涓婃槸閭ｄ釜 IP 缃戝潃锛屽湪 GitHub Pages 涓婂氨鏄偅涓煭缃戝潃銆?*/
+  function prettyUrl() {
+    var p = location.pathname.replace(/index\.html?$/i, '');
+    if (p.slice(-1) !== '/') p += '/';
+    return location.origin + p;
+  }
+
+  /** 渚濇鎺㈡祴鍊欓€夋帴鍙ｏ紝鎸戠涓€涓€氱殑锛圙itHub Pages 鐗堥潬杩欎釜鑷姩鍒囧埌闅ч亾锛?*/
+  function pickApi(done) {
+    var i = 0;
+    (function next() {
+      if (i >= API_BASES.length) { done(API_BASES[0]); return; }
+      var base = API_BASES[i++];
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 4000);
+      fetch(base + 'meta', ctrl ? { signal: ctrl.signal } : {})
+        .then(function (r) { if (!r.ok) throw new Error('bad'); return r.json(); })
+        .then(function () { clearTimeout(timer); done(base); },
+              function () { clearTimeout(timer); next(); });
+    })();
+  }
+
+  // ---------------- 鍑犱綍锛堝拰涓婚〉闈竴鑷达紝浣嗕笉鍚眰瑙ｅ櫒锛?----------------
+  function cellEdges(i) {
+    var r = Math.floor(i / C), c = i % C;
+    return [r * C + c, (r + 1) * C + c, nh + r * (C + 1) + c, nh + r * (C + 1) + c + 1];
+  }
+  function layout(S, M) {
+    var pts = new Array(E), cellX = new Array(C), cellY = new Array(R);
+    var W = C * S + 2 * M, H = R * S + 2 * M, r, c;
+    for (r = 0; r <= R; r++) for (c = 0; c < C; c++) {
+      var y = M + r * S, x = M + c * S; pts[r * C + c] = [x, y, x + S, y];
+    }
+    for (r = 0; r < R; r++) for (c = 0; c <= C; c++) {
+      var x2 = M + c * S, y2 = M + r * S; pts[nh + r * (C + 1) + c] = [x2, y2, x2, y2 + S];
+    }
+    for (c = 0; c < C; c++) cellX[c] = M + (c + 0.5) * S;
+    for (r = 0; r < R; r++) cellY[r] = M + (r + 0.5) * S;
+    var fx0 = M - 0.5 * S, fy0 = M - 0.5 * S, fx1 = M + C * S + 0.5 * S, fy1 = M + R * S + 0.5 * S;
+    var segs = [];
+    for (r = 0; r <= R; r++) for (c = 0; c < C; c++) {
+      var ax = cellX[c];
+      var by = (r === 0) ? cellY[0] : (r === R ? cellY[R - 1] : cellY[r]);
+      var ay = (r === 0) ? fy0 : (r === R ? fy1 : cellY[r - 1]);
+      segs.push(ax, by, ax, ay);
+    }
+    for (r = 0; r < R; r++) for (c = 0; c <= C; c++) {
+      var ay2 = cellY[r];
+      var bx = (c === 0) ? cellX[0] : (c === C ? cellX[C - 1] : cellX[c]);
+      var ax2 = (c === 0) ? fx0 : (c === C ? fx1 : cellX[c - 1]);
+      segs.push(bx, ay2, ax2, ay2);
+    }
+    return { pts: pts, W: W, H: H, cellX: cellX, cellY: cellY, segs: segs,
+             frame: [fx0, fy0, (C + 1) * S, (R + 1) * S] };
+  }
+
+  // ---------------- 娓叉煋 ----------------
+  function render() {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    edgeNodes = []; clueNodes = {};
+    user = new Int8Array(E);
+    var S = Math.max(22, Math.min(62, Math.floor(560 / R)));
+    var M = Math.round(S * 0.78);
+    var L = layout(S, M);
+    geom = { S: S, M: M, W: L.W, H: L.H, pts: L.pts };
+    svg.setAttribute('viewBox', '0 0 ' + L.W + ' ' + L.H);
+    svg.style.width = '100%'; svg.style.maxWidth = L.W + 'px'; svg.style.height = 'auto';
+
+    var g = el('g', {});
+    svg.appendChild(g);
+    for (var i = 0; i < L.segs.length; i += 4) {
+      g.appendChild(el('line', { 'class': 'dgrid', x1: L.segs[i], y1: L.segs[i + 1],
+        x2: L.segs[i + 2], y2: L.segs[i + 3], 'stroke-width': Math.max(2, S * 0.07) }));
+    }
+    g.appendChild(el('rect', { 'class': 'frame', x: L.frame[0], y: L.frame[1],
+      width: L.frame[2], height: L.frame[3], rx: Math.round(S * 0.22) }));
+
+    var lineW = Math.max(5, S * 0.16), crossW = Math.max(2.6, S * 0.08), crossK = Math.max(5, S * 0.16);
+    var gE = el('g', {});
+    svg.appendChild(gE);
+    for (var e = 0; e < E; e++) {
+      var q = L.pts[e], x1 = q[0], y1 = q[1], x2 = q[2], y2 = q[3];
+      var it = el('g', { 'class': 'edge-item', 'data-e': e });
+      it.appendChild(el('line', { 'class': 'edge', x1: x1, y1: y1, x2: x2, y2: y2, 'stroke-width': lineW }));
+      var mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      var cr = el('g', { 'class': 'cross' });
+      cr.appendChild(el('line', { x1: mx - crossK, y1: my - crossK, x2: mx + crossK, y2: my + crossK, 'stroke-width': crossW }));
+      cr.appendChild(el('line', { x1: mx - crossK, y1: my + crossK, x2: mx + crossK, y2: my - crossK, 'stroke-width': crossW }));
+      it.appendChild(cr);
+      gE.appendChild(it); edgeNodes.push(it);
+    }
+
+    var gC = el('g', {});
+    svg.appendChild(gC);
+    for (var k = 0; k < R * C; k++) {
+      if (clue[k] === undefined) continue;
+      var rr = Math.floor(k / C), cc = k % C;
+      var t = el('text', { 'class': 'clue', x: L.cellX[cc], y: L.cellY[rr],
+        'font-size': Math.round(S * 0.48), 'stroke-width': Math.max(3, Math.round(S * 0.22)) });
+      t.textContent = clue[k];
+      gC.appendChild(t); clueNodes[k] = t;
+    }
+
+    var gD = el('g', {});
+    for (var dr = 0; dr <= R; dr++) for (var dc = 0; dc <= C; dc++) {
+      gD.appendChild(el('circle', { 'class': 'dot', cx: M + dc * S, cy: M + dr * S, r: Math.max(2, S * 0.062) }));
+    }
+    svg.appendChild(gD);
+    hotDotEl = el('circle', { 'class': 'hotdot', cx: -999, cy: -999, r: Math.max(6, S * 0.15) });
+    svg.appendChild(hotDotEl);
+
+    syncColors();
+  }
+
+  function paint(e) {
+    var it = edgeNodes[e]; if (!it) return;
+    it.classList.toggle('s1', user[e] === 1);
+    it.classList.toggle('s2', user[e] === 2);
+  }
+
+  function clueCounts() {
+    var bad = 0;
+    for (var i = 0; i < R * C; i++) {
+      var v = clue[i]; if (v === undefined) continue;
+      var ce = cellEdges(i), cnt = 0;
+      for (var k = 0; k < 4; k++) if (user[ce[k]] === 1) cnt++;
+      var node = clueNodes[i];
+      if (node) node.setAttribute('class', 'clue ' + (cnt === v ? 'ok' : (cnt > v ? 'over' : 'under')));
+      if (cnt !== v) bad++;
+    }
+    return bad;
+  }
+
+  function syncColors() { clueCounts(); }
+
+  // ---------------- 鍧愭爣 ----------------
+  function toLocal(ev) {
+    var r = svg.getBoundingClientRect();
+    return { x: (ev.clientX - r.left) * (geom.W / r.width),
+             y: (ev.clientY - r.top) * (geom.H / r.height) };
+  }
+  function dotAt(x, y) {
+    var S = geom.S, M = geom.M;
+    var j = Math.round((x - M) / S), i = Math.round((y - M) / S);
+    if (i < 0) i = 0; else if (i > R) i = R;
+    if (j < 0) j = 0; else if (j > C) j = C;
+    return i * (C + 1) + j;
+  }
+  function edgeBetweenDots(d1, d2) {
+    if (d1 < 0 || d2 < 0 || d1 === d2) return -1;
+    var C1 = C + 1, lo = Math.min(d1, d2), hi = Math.max(d1, d2);
+    var i = Math.floor(lo / C1), j = lo % C1;
+    if (hi - lo === 1 && Math.floor(hi / C1) === i) return i * C + j;
+    if (hi - lo === C1) return nh + lo;
+    return -1;
+  }
+  function segDist(px, py, x1, y1, x2, y2) {
+    var dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
+    var t = L2 ? ((px - x1) * dx + (py - y1) * dy) / L2 : 0;
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    var qx = x1 + t * dx - px, qy = y1 + t * dy - py;
+    return Math.sqrt(qx * qx + qy * qy);
+  }
+  function edgeAtPoint(x, y, thr) {
+    var best = -1, bestD = thr;
+    for (var e = 0; e < E; e++) {
+      var q = geom.pts[e], d = segDist(x, y, q[0], q[1], q[2], q[3]);
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    return best;
+  }
+  function hotDot(d) {
+    var C1 = C + 1, i = Math.floor(d / C1), j = d % C1, S = geom.S, M = geom.M;
+    hotDotEl.setAttribute('cx', M + j * S);
+    hotDotEl.setAttribute('cy', M + i * S);
+    hotDotEl.setAttribute('r', Math.max(6, S * 0.15));
+  }
+  function applyEdge(e, st) {
+    if (e < 0 || user[e] === st) return;
+    user[e] = st; paint(e); syncColors(); maybeCheck();
+  }
+  function toggleCross(e) { if (e >= 0) applyEdge(e, user[e] === 2 ? 0 : 2); }
+
+  var crossMode = null;
+  function crossStroke(pt) {
+    var e = edgeAtPoint(pt.x, pt.y, geom.S * 0.42); if (e < 0) return;
+    if (crossMode === null) crossMode = (user[e] === 2) ? 'erase' : 'paint';
+    applyEdge(e, crossMode === 'erase' ? 0 : 2);
+  }
+
+  svg.addEventListener('pointerdown', function (ev) {
+    var pt = toLocal(ev), t = dotAt(pt.x, pt.y);
+    ev.preventDefault();
+    touchTimer();
+    if (svg.setPointerCapture) { try { svg.setPointerCapture(ev.pointerId); } catch (_) {} }
+    painting = true; mode = ev.button === 2 ? 'cross' : 'line';
+    dragFrom = t; strokeMode = null; crossMode = null;
+    downPt = pt; movedFar = false; longPressed = false;
+    lastPtrType = ev.pointerType || 'mouse';
+    if (mode === 'cross') crossStroke(pt);
+    else if (ev.pointerType === 'touch') {
+      clearTimeout(pressTimer);
+      pressTimer = setTimeout(function () {
+        pressTimer = null; longPressed = true;
+        toggleCross(edgeAtPoint(pt.x, pt.y, geom.S * 0.45));
+        if (navigator.vibrate) { try { navigator.vibrate(15); } catch (_) {} }
+      }, 420);
+    }
+    hotDot(t);
+  }, { passive: false });
+
+  svg.addEventListener('pointermove', function (ev) {
+    var pt = toLocal(ev), t = dotAt(pt.x, pt.y);
+    if (painting) {
+      if (downPt && !movedFar && Math.abs(pt.x - downPt.x) + Math.abs(pt.y - downPt.y) > geom.S * 0.22) {
+        movedFar = true;
+        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      }
+      if (mode === 'cross') { crossStroke(pt); return; }
+      if (t === dragFrom) return;
+      var e = edgeBetweenDots(dragFrom, t);
+      if (e >= 0) {
+        if (strokeMode === null) strokeMode = (user[e] === 1) ? 'erase' : 'paint';
+        applyEdge(e, strokeMode === 'erase' ? 0 : 1);
+      }
+      dragFrom = t; hotDot(t);
+      return;
+    }
+    hotDot(t);
+  }, { passive: true });
+
+  function endPaint(ev) {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    if (painting && mode === 'line' && !longPressed && !movedFar && downPt) {
+      toggleCross(edgeAtPoint(downPt.x, downPt.y, geom.S * 0.36));
+    }
+    painting = false; dragFrom = -1; strokeMode = null; crossMode = null;
+    downPt = null; movedFar = false; longPressed = false; mode = 'line';
+    if (lastPtrType === 'touch' && hotDotEl) {      // 鎵嬫満涓婃姮鎵嬪氨鏀舵帀楂樹寒
+      hotDotEl.setAttribute('cx', -999);
+      hotDotEl.setAttribute('cy', -999);
+    }
+    if (ev && ev.pointerId !== undefined && svg.releasePointerCapture) {
+      try { svg.releasePointerCapture(ev.pointerId); } catch (_) {}
+    }
+    maybeCheck();
+  }
+  svg.addEventListener('pointerup', endPaint);
+  svg.addEventListener('pointercancel', endPaint);
+  svg.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
+
+  // ---------------- 璁℃椂 ----------------
+  function fmt(ms) {
+    var s = Math.max(0, Math.floor(ms / 1000));
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(ss).padStart(2, '0');
+  }
+  function startKey() { return 'sl-time-' + puzzleMode + '-' + meta.date; }  // 瀛樼殑鏄€岀疮璁℃绉掋€?  function doneKey() { return 'sl-done-' + puzzleMode + '-' + meta.date; }
+  function tickIn() {                       // 鎶婂綋鍓嶈繖娈靛彲瑙佹椂闂寸粨绠楁帀
+    if (running) { elapsedMs += Date.now() - runFrom; running = false; }
+  }
+  function startRun() {                     // 寮€濮嬩竴娈靛彲瑙佹椂闂?    if (!started || solved || running || document.hidden) return;
+    running = true; runFrom = Date.now();
+  }
+  function saveElapsed() {
+    try { localStorage.setItem(startKey(), String(Math.round(elapsedMs))); } catch (e) {}
+  }
+  function currentMs() { return elapsedMs + (running ? Date.now() - runFrom : 0); }
+  function touchTimer() {                   // 绗竴娆¤Е纰版鐩樻墠寮€濮嬭鏃?    if (!started) started = true;
+    startRun();
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { tickIn(); saveElapsed(); }   // 鍒囧悗鍙?閿佸睆 -> 鏆傚仠骞跺瓨鐩?    else startRun();                                    // 鍥炲埌鍓嶅彴 -> 缁х画
+  });
+  window.addEventListener('pagehide', function () { tickIn(); saveElapsed(); });
+  window.addEventListener('beforeunload', function () { tickIn(); saveElapsed(); });
+  setInterval(function () {
+    if (!meta) return;
+    document.getElementById('clock').textContent = fmt(solved ? elapsedDone : currentMs());
+  }, 500);
+
+  // ---------------- 鏍￠獙 ----------------
+  function maybeCheck() {
+    if (solved || checking || !meta) return;
+    if (clueCounts() !== 0) return;          // 鏁板瓧杩樻病鍏ㄥ涓?    checking = true;
+    var edges = [];
+    for (var e = 0; e < E; e++) if (user[e] === 1) edges.push(e);
+    var body = { edges: edges, mode: puzzleMode };
+    var modeAtSend = puzzleMode;
+    fetch(API + 'check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (modeAtSend !== puzzleMode) return;   // 涓€斿垏浜嗘ā寮忥紝缁撴灉浣滃簾
+      checking = false;
+      if (d.ok) win();
+      else if (modeAtSend === 'fun')
+        toast('鏁板瓧閮藉浜嗭紝浣嗙嚎瑕佹嫾鎴愩€? + (meta.shape || '鐩爣') + '銆嶇殑褰㈢姸鎵嶇畻瀹屾垚鍝?);
+      else toast('鏁板瓧閮藉浜嗭紝浣嗙嚎瑕佽繛鎴愪竴涓畬鏁寸殑鐜墠绠楀畬鎴愬摝');
+    }).catch(function () { checking = false; });
+  }
+
+  function win() {
+    if (solved) return;
+    solved = true;
+    tickIn();                                   // 缁撶畻鏈€鍚庝竴娈?    elapsedDone = elapsedMs;
+    saveElapsed();
+    try { localStorage.setItem(doneKey(), JSON.stringify({ ms: elapsedDone, at: new Date().toISOString() })); } catch (e) {}
+    document.getElementById('clock').textContent = fmt(elapsedDone);
+    document.getElementById('shareBtn').style.display = 'inline-block';
+    confetti();
+    showModal();
+  }
+
+  // ---------------- 寮圭獥 / 鍒嗕韩 ----------------
+  function shareText() {
+    var tag = (puzzleMode === 'fun' && meta.shape) ? ' 路 瓒ｅ懗銆? + meta.shape + '銆? : '';
+    return '馃З 鏁板洖 路 姣忔棩涓€棰?#' + meta.index + tag + '\n' +
+           '鉁?浠婂ぉ閫氬叧鍟︼紒鐢ㄦ椂 ' + fmt(elapsedDone) + '\n' +
+           '馃搮 ' + meta.date + ' ' + meta.week + ' 路 ' + meta.rows + '脳' + meta.cols + '\n' +
+           meta.siteUrl;
+  }
+  function showModal() {
+    document.getElementById('modalMeta').innerHTML =
+      '<b>Daily Slitherlink #' + meta.index + '</b>' +
+      (puzzleMode === 'fun' && meta.shape ? ' 路 瓒ｅ懗銆? + meta.shape + '銆? : '') + '<br>' +
+      meta.date + '锛? + meta.week + '锛壜?' + meta.rows + '脳' + meta.cols + '<br>' +
+      '鐢ㄦ椂 <b>' + fmt(elapsedDone) + '</b>';
+    document.getElementById('shareText').textContent = shareText();
+    mask.classList.add('show');
+  }
+  document.getElementById('shareBtn').addEventListener('click', function () { showModal(); });
+  document.getElementById('closeModal').addEventListener('click', function () { mask.classList.remove('show'); });
+  mask.addEventListener('click', function (e) { if (e.target === mask) mask.classList.remove('show'); });
+  document.getElementById('share').addEventListener('click', function () {
+    var txt = shareText();
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); toast('宸插鍒跺埌鍓创鏉?); }
+      catch (e) { toast('澶嶅埗澶辫触锛岄暱鎸変笂闈㈤偅娈垫枃瀛楀惂'); }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () { toast('宸插鍒跺埌鍓创鏉?); }, fallback);
+    } else fallback();
+  });
+  document.getElementById('clear').addEventListener('click', function () {
+    for (var e = 0; e < E; e++) { user[e] = 0; paint(e); }
+    syncColors();
+  });
+
+  // ---------------- 鎾掕姳 ----------------
+  function confetti() {
+    var cv = document.getElementById('confetti');
+    var ctx = cv.getContext('2d');
+    cv.style.display = 'block';
+    cv.width = window.innerWidth; cv.height = window.innerHeight;
+    var colors = ['#2563eb', '#059669', '#f59e0b', '#dc2626', '#7c3aed', '#0891b2', '#ec4899'];
+    var parts = [];
+    for (var i = 0; i < 160; i++) {
+      parts.push({
+        x: Math.random() * cv.width, y: -20 - Math.random() * cv.height * 0.5,
+        w: 6 + Math.random() * 7, h: 8 + Math.random() * 8,
+        vy: 1.8 + Math.random() * 3.2, vx: -1.4 + Math.random() * 2.8,
+        rot: Math.random() * Math.PI, vr: -0.12 + Math.random() * 0.24,
+        col: colors[(Math.random() * colors.length) | 0]
+      });
+    }
+    var t0 = Date.now();
+    (function tick() {
+      var alive = 0;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.vy += 0.03;
+        if (p.y < cv.height + 30) alive++;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = p.col; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
+      }
+      if (alive > 0 && Date.now() - t0 < 6000) requestAnimationFrame(tick);
+      else { ctx.clearRect(0, 0, cv.width, cv.height); cv.style.display = 'none'; }
+    })();
+  }
+
+  // ---------------- 甯姪锛氱敤鍚屼竴涓?5脳5 鐩橀潰鍥捐В瑙勫垯 ----------------
+  // 杩欎釜鐩橀潰鏄紩鎿庣敓鎴愬苟楠岃瘉杩囩殑锛涘洓涓緥瀛愰兘鍙敼绾裤€佷笉鏀规暟瀛?  var HELP_R = 5, HELP_C = 5, HELP_NH = (HELP_R + 1) * HELP_C;
+  var HELP_CLUES = [[0,0,3],[0,1,3],[0,3,1],[0,4,0],[1,4,1],[2,1,0],[3,1,3],[3,4,3],[4,2,1]];
+  var HELP_EX = {
+    // 姝ｈВ锛氬敮涓€瑙ｏ紝26 鏉¤竟
+    ok:     [0,2,6,13,14,15,17,19,21,24,28,29,30,31,32,33,36,39,42,47,49,50,51,52,57,59],
+    // 涓嬮潰鍥涘紶鏄?鏁板瓧鍏ㄥ浣嗛兘涓嶅悎娉?鐨勫弽渚?    two:    [0,1,5,6,8,15,17,19,21,24,25,26,27,28,30,32,39,40,45,46,48,49,50,53,54,58],       // 涓や釜鐜?    fork:   [0,1,2,6,12,13,14,15,17,19,21,24,28,29,30,31,33,36,38,39,42,47,49,50,51,52,57,59], // 鏈夊垎鍙?    broken: [1,5,7,8,15,17,19,21,24,28,30,31,32,40,46,48,49,50,51,53,54,57,58],                // 鏈夋柇澶?    cross:  [0,1,5,6,7,8,12,15,17,19,21,24,25,26,27,28,30,32,38,40,45,46,48,49,50,53,54,58]    // 鑷繁浜ゅ弶
+  };
+
+  // 瓒ｅ懗妯″紡鐨勭ず渚嬶細鍚屼竴涓€屾棩銆嶇殑涓ょ鐢绘硶锛堥兘鏄?7脳7 涓婂疄闄呴暱鍑烘潵鐨勫浘褰級锛屽鍔犱袱绉嶄笉绠楃殑
+  var FUN_EX = {
+    ok1:  [3,8,9,11,12,14,16,17,21,23,27,30,33,34,36,38,40,41,42,43,45,47,51,53,55,59,60,65,70,72,74,76,78,80,81,83,84,87,88,89,90,92,93,96,99,103,106,107,108,109,110,111],
+    ok2:  [2,10,11,26,29,32,34,35,37,38,41,43,46,48,49,50,51,52,54,55,58,59,66,69,74,77,82,85,86,89,92,95,96,98,102,104,105,108,109,111],
+    bad1: [8,9,10,11,12,43,44,45,46,47,65,70,73,78,81,86,89,94,97,102],
+    bad2: [0,1,14,15,40,41,54,55,56,58,64,66,101,103,109,111]
+  };
+
+  /** 鎶婁竴涓?R脳C 鐩橀潰鐢绘垚灏忓浘锛堢敾娉曞拰鐪熷疄妫嬬洏涓€鑷达紝鏁板瓧鎸夋槸鍚﹀涓婄潃鑹诧級
+   *  缃戞牸绾垮悎骞舵垚涓€鏉?<path>锛屾墜鏈轰笂鍏冪礌灏戙€佹粴鍔ㄤ笉鍗?*/
+  function helpBoardFig(R, C, clues, edges, size, withNumbers) {
+    var NH = (R + 1) * C;
+    var size0 = size;
+    var M = Math.round(size0 * 0.78);
+    var W = C * size0 + 2 * M, H = R * size0 + 2 * M;
+    var s = el('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H });
+    function cx(c) { return M + (c + 0.5) * size0; }
+    function cy(r) { return M + (r + 0.5) * size0; }
+    function px(j) { return M + j * size0; }
+    function py(i) { return M + i * size0; }
+    var fx0 = M - 0.5 * size0, fy0 = M - 0.5 * size0;
+    var fx1 = M + C * size0 + 0.5 * size0, fy1 = M + R * size0 + 0.5 * size0;
+    var r, c, d = '';
+    for (r = 0; r <= R; r++) for (c = 0; c < C; c++) {
+      var ay = (r === 0) ? fy0 : (r === R ? fy1 : cy(r));
+      var by = (r === 0) ? cy(0) : (r === R ? cy(R - 1) : cy(r - 1));
+      d += 'M' + cx(c) + ' ' + by + 'L' + cx(c) + ' ' + ay;
+    }
+    for (r = 0; r < R; r++) for (c = 0; c <= C; c++) {
+      var ax = (c === 0) ? fx0 : (c === C ? fx1 : cx(c));
+      var bx = (c === 0) ? cx(0) : (c === C ? cx(C - 1) : cx(c - 1));
+      d += 'M' + bx + ' ' + cy(r) + 'L' + ax + ' ' + cy(r);
+    }
+    s.appendChild(el('path', { 'class': 'dgrid', d: d,
+      'stroke-width': Math.max(2, size0 * 0.07), fill: 'none' }));
+    s.appendChild(el('rect', { 'class': 'frame', x: fx0, y: fy0,
+      width: fx1 - fx0, height: fy1 - fy0, rx: Math.round(size0 * 0.22) }));
+
+    var cnt = new Array(R * C).fill(0);
+    (edges || []).forEach(function (e) {
+      var q, cells = [];
+      if (e < NH) {
+        var rr = Math.floor(e / C), cc = e % C;
+        q = [px(cc), py(rr), px(cc + 1), py(rr)];
+        if (rr > 0) cells.push((rr - 1) * C + cc);
+        if (rr < R) cells.push(rr * C + cc);
+      } else {
+        var k = e - NH, r2 = Math.floor(k / (C + 1)), c2 = k % (C + 1);
+        q = [px(c2), py(r2), px(c2), py(r2 + 1)];
+        if (c2 > 0) cells.push(r2 * C + c2 - 1);
+        if (c2 < C) cells.push(r2 * C + c2);
+      }
+      cells.forEach(function (i) { cnt[i]++; });
+      s.appendChild(el('line', { 'class': 'help-edge', x1: q[0], y1: q[1], x2: q[2], y2: q[3],
+        'stroke-width': Math.max(4, size0 * 0.15) }));
+    });
+
+    var clueMap = {};
+    (clues || []).forEach(function (cl) { clueMap[cl[0] * C + cl[1]] = cl[2]; });
+    if (withNumbers !== false) {
+      for (var i = 0; i < R * C; i++) {
+        var v = clueMap[i];
+        if (v === undefined) continue;
+        var cls = (cnt[i] === v) ? 'ok' : (cnt[i] > v ? 'over' : 'under');
+        var t = el('text', { 'class': 'clue ' + cls, x: cx(i % C), y: cy(Math.floor(i / C)),
+          'font-size': Math.round(size0 * 0.48) });
+        t.textContent = v;
+        s.appendChild(t);
+      }
+    }
+    for (var ii = 0; ii <= R; ii++) for (var jj = 0; jj <= C; jj++) {
+      s.appendChild(el('circle', { 'class': 'dot', cx: px(jj), cy: py(ii),
+        r: Math.max(2, size0 * 0.062) }));
+    }
+    return s;
+  }
+
+  // 鈶?鏁板瓧绀烘剰锛? 涓崟鏍硷紝鍒嗗埆鐢?0/1/2/3 鏉¤竟
+  var DIGIT_EDGES = {
+    0: [],
+    1: ['H0'],
+    2: ['H0', 'H1'],
+    3: ['H0', 'H1', 'V0']
+  };
+  function helpDigitFig(n, size) {
+    var NH = 2;                                    // 1x1 妫嬬洏锛歯h = (1+1)*1 = 2
+    var map = { H0: 0, H1: 1, V0: NH + 0 * 2 + 0 };
+    var edges = DIGIT_EDGES[n].map(function (k) { return map[k]; });
+    return helpBoardFig(1, 1, [[0, 0, n]], edges, size, true);
+  }
+
+  var helpBuilt = false;
+  function buildHelp() {
+    if (helpBuilt) return;
+    helpBuilt = true;
+    var put = function (id, node) { var box = document.getElementById(id); if (box) box.appendChild(node); };
+    // 鈶?鏁板瓧
+    put('hd0', helpDigitFig(0, 46));
+    put('hd1', helpDigitFig(1, 46));
+    put('hd2', helpDigitFig(2, 46));
+    put('hd3', helpDigitFig(3, 46));
+    // 鈶?鍥炶矾
+    put('hx_ok', helpBoardFig(HELP_R, HELP_C, HELP_CLUES, HELP_EX.ok, 44, true));
+    put('hx_two', helpBoardFig(HELP_R, HELP_C, HELP_CLUES, HELP_EX.two, 40, true));
+    put('hx_fork', helpBoardFig(HELP_R, HELP_C, HELP_CLUES, HELP_EX.fork, 40, true));
+    put('hx_broken', helpBoardFig(HELP_R, HELP_C, HELP_CLUES, HELP_EX.broken, 40, true));
+    put('hx_cross', helpBoardFig(HELP_R, HELP_C, HELP_CLUES, HELP_EX.cross, 40, true));
+    // 鈶?瓒ｅ懗妯″紡锛氬悓涓€妗ｇ殑涓ょ鐢绘硶 + 涓ょ涓嶇畻鐨?    put('fy_ok1', helpBoardFig(7, 7, null, FUN_EX.ok1, 30, false));
+    put('fy_ok2', helpBoardFig(7, 7, null, FUN_EX.ok2, 30, false));
+    put('fy_bad1', helpBoardFig(7, 7, null, FUN_EX.bad1, 30, false));
+    put('fy_bad2', helpBoardFig(7, 7, null, FUN_EX.bad2, 30, false));
+  }
+  var helpMask = document.getElementById('helpMask');
+  var funMask = document.getElementById('funMask');
+  function openHelp(which, force) {
+    var key = which === 'fun' ? 'sl-help-fun-seen' : 'sl-help-seen';
+    var seen = false;
+    try { seen = localStorage.getItem(key) === '1'; } catch (e) {}
+    if (!seen || force) {
+      buildHelp();
+      (which === 'fun' ? funMask : helpMask).classList.add('show');
+      try { localStorage.setItem(key, '1'); } catch (e) {}
+    }
+  }
+  document.getElementById('helpBtn').addEventListener('click', function () {
+    openHelp(puzzleMode === 'fun' ? 'fun' : 'normal', true);
+  });
+  document.getElementById('helpClose').addEventListener('click', function () { helpMask.classList.remove('show'); });
+  document.getElementById('funHelpClose').addEventListener('click', function () { funMask.classList.remove('show'); });
+  helpMask.addEventListener('click', function (e) { if (e.target === helpMask) helpMask.classList.remove('show'); });
+  funMask.addEventListener('click', function (e) { if (e.target === funMask) funMask.classList.remove('show'); });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { helpMask.classList.remove('show'); funMask.classList.remove('show'); }
+  });
+
+  // ---------------- 鍚姩 ----------------
+  function syncModeButtons() {
+    var bs = document.querySelectorAll('#modes button');
+    for (var i = 0; i < bs.length; i++) {
+      bs[i].classList.toggle('on', bs[i].getAttribute('data-mode') === puzzleMode);
+    }
+  }
+
+  function resetState() {
+    solved = false; checking = false; started = false; running = false;
+    elapsedMs = 0; elapsedDone = 0; runFrom = 0;
+    document.getElementById('clock').textContent = '0:00';
+    document.getElementById('shareBtn').style.display = 'none';
+  }
+
+  function loadDaily(tries) {
+    tries = tries || 0;
+    var m = puzzleMode;
+    fetch(API + 'daily?mode=' + m).then(function (r) { return r.json(); }).then(function (d) {
+      if (m !== puzzleMode) return;              // 鏈熼棿鍒囦簡妯″紡锛屼綔搴?      if (d && d.warming) {                      // 鏈嶅姟鍣ㄦ鍦ㄧ敓鎴愪粖澶╃殑棰?        document.getElementById('sub').innerHTML = '<span class="spin"></span>' +
+          (m === 'fun' ? '瓒ｅ懗棰樼洰姝ｅ湪鐢熸垚锛堢涓€娆¤绠椾竴浼氬効锛夛紝璇风◢鍊欌€?
+                       : '浠婂ぉ鐨勯鐩鍦ㄧ敓鎴愶紝璇风◢鍊欌€?);
+        var cap = m === 'fun' ? 160 : 40;        // 瓒ｅ懗妯″紡鎱紝澶氱瓑涓€浼氬効
+        if (tries < cap) setTimeout(function () { if (m === puzzleMode) loadDaily(tries + 1); }, 3000);
+        else document.getElementById('sub').textContent = '鏈嶅姟鍣ㄨ繕鍦ㄧ畻锛岃繃涓€浼氬効鍒锋柊鐪嬬湅';
+        return;
+      }
+      if (!d || !d.clues) throw new Error(d && d.msg ? d.msg : 'no data');
+      start(d);
+    }).catch(function (e) {
+      if (m !== puzzleMode) return;
+      if (tries < 5) {                           // 缃戠粶鎶栧姩锛氱瓑 2 绉掗噸璇?        setTimeout(function () { if (m === puzzleMode) loadDaily(tries + 1); }, 2000);
+        return;
+      }
+      document.getElementById('sub').textContent = '棰樼洰杞藉叆澶辫触锛? + e.message + '锛堝埛鏂伴噸璇曪級';
+    });
+  }
+
+  function start(d) {
+    meta = d;
+    puzzleMode = d.mode === 'fun' ? 'fun' : 'normal';
+    syncModeButtons();
+    meta.siteUrl = prettyUrl();
+    R = d.rows; C = d.cols; nh = (R + 1) * C; E = nh + R * (C + 1);
+    clue = {};
+    d.clues.forEach(function (c) { clue[c[0] * C + c[1]] = c[2]; });
+    document.getElementById('no').textContent = '#' + d.index;
+    document.getElementById('date').textContent = d.date + '锛? + d.week + '锛?;
+    document.getElementById('info').textContent = d.rows + '脳' + d.cols;
+    var targetEl = document.getElementById('target');
+    if (puzzleMode === 'fun' && d.shape) {
+      targetEl.classList.add('on');
+      document.getElementById('glyph').textContent = d.shape;
+    } else {
+      targetEl.classList.remove('on');
+    }
+    document.getElementById('sub').textContent = '';
+    svg.style.visibility = 'visible';
+    render();
+    openHelp(puzzleMode === 'fun' ? 'fun' : 'normal', false);   // 绗竴娆℃潵鍏堢湅涓€鐪艰鍒?    try {
+      var done = localStorage.getItem(doneKey());
+      if (done) {                            // 浠婂ぉ宸插畬鎴愶細鍐荤粨鐢ㄦ椂锛屼笉鍐嶈鏃?        var o = JSON.parse(done);
+        solved = true; elapsedDone = o.ms || 0;
+        document.getElementById('clock').textContent = fmt(elapsedDone);
+        document.getElementById('sub').textContent = '浠婂ぉ宸茬粡瀹屾垚鍟?鉁擄紙鐢ㄦ椂 ' + fmt(elapsedDone) + '锛?;
+        document.getElementById('shareBtn').style.display = 'inline-block';
+      }
+      var s = localStorage.getItem(startKey());
+      if (s) { elapsedMs = parseInt(s, 10) || 0; started = elapsedMs > 0; }
+      if (started && !solved) startRun();    // 涔嬪墠寮€濮嬭繃 -> 鐜板湪鍙灏辨帴鐫€璧?    } catch (e) {}
+  }
+
+  function switchMode(m) {
+    if (m === puzzleMode) return;
+    puzzleMode = m;
+    try { localStorage.setItem('sl-mode', m); } catch (e) {}
+    syncModeButtons();
+    resetState();
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.style.visibility = 'hidden';
+    document.getElementById('no').textContent = '鈥?;
+    document.getElementById('info').textContent = '';
+    document.getElementById('target').classList.remove('on');
+    document.getElementById('sub').textContent = '';
+    if (m === 'fun') openHelp('fun', false);   // 绗竴娆¤繘瓒ｅ懗妯″紡锛氬崟鐙竴浠借鍒欒鏄?    loadDaily(0);
+  }
+
+  try {
+    var saved = localStorage.getItem('sl-mode');
+    if (saved === 'fun' || saved === 'normal') puzzleMode = saved;
+  } catch (e) {}
+  syncModeButtons();
+  var modeBtns = document.querySelectorAll('#modes button');
+  for (var mb = 0; mb < modeBtns.length; mb++) {
+    modeBtns[mb].addEventListener('click', function () { switchMode(this.getAttribute('data-mode')); });
+  }
+  // 鍏堟帰涓€涓嬪摢涓帴鍙ｆ槸閫氱殑锛堣嚜宸辨湇鍔″櫒璧板悓婧愶紝GitHub Pages 璧颁笂閭ｆ潯 https 闅ч亾锛?  pickApi(function (base) { API = base; loadDaily(0); });
+
+  // 瀹屾垚鐘舵€佷笅鎸変换鎰忛敭/鐐瑰嚮涓嶈Е鍙戣鏃?  window.addEventListener('keydown', function (e) { if (e.key === 'Escape') mask.classList.remove('show'); });
+})();
+</script>
+</body>
+</html>
