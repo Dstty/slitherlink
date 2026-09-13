@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>鏁板洖 路 姣忔棩涓€棰?/title>
+<title>数回 · 每日一题</title>
 <style>
   :root {
     --bg: #eef1f6; --panel: #fff; --ink: #1f2937; --muted: #6b7280;
@@ -24,7 +24,7 @@
     background: #fff; color: var(--ink); cursor: pointer; transition: .15s; }
   button:hover { border-color: #9ca3af; }
   button.primary { background: var(--line); border-color: var(--line); color: #fff; font-weight: 600; }
-  /* 妯″紡鍒囨崲 */
+  /* 模式切换 */
   .modes { display: inline-flex; background: #eef1f6; border-radius: 10px; padding: 2px; gap: 2px; }
   .modes button { padding: 4px 12px; border: 0; background: transparent; color: var(--muted);
     border-radius: 8px; font-size: 13px; }
@@ -33,14 +33,14 @@
     box-shadow: 0 1px 3px rgba(15,23,42,.12); }
   #clock { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
   .stage { display: flex; justify-content: center; }
-  /* 瓒ｅ懗妯″紡锛氭妸褰撳ぉ閭ｄ釜瀛楀啓澶т竴鐐癸紝鏀惧湪妫嬬洏涓婃柟 */
+  /* 趣味模式：把当天那个字写大一点，放在棋盘上方 */
   .target { display: none; align-items: center; justify-content: center;
     margin: 0 0 12px; }
   .target.on { display: flex; }
   .target .glyph { font-size: 40px; line-height: 1; font-weight: 700; color: var(--line);
     background: #eff4ff; border: 1px solid #dbe6ff; border-radius: 14px;
     padding: 6px 16px 10px; }
-  /* 鍙湁鐪熸鐨勬鐩樻墠绂佺敤娴忚鍣ㄦ墜鍔匡紙鐢荤嚎瑕佺敤鎵嬪娍锛夛紱甯姪閲岀殑灏忓浘蹇呴』鏀捐锛屽惁鍒欏垝涓嶅姩 */
+  /* 只有真正的棋盘才禁用浏览器手势（画线要用手势）；帮助里的小图必须放行，否则划不动 */
   #board { touch-action: none; user-select: none; -webkit-user-select: none;
            cursor: crosshair; display: block; }
   .figs svg { display: block; pointer-events: none; touch-action: auto; }
@@ -64,7 +64,7 @@
   .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #cbd5e1; border-top-color: var(--line);
     border-radius: 50%; animation: r .7s linear infinite; vertical-align: -1px; margin-right: 6px; }
   @keyframes r { to { transform: rotate(360deg); } }
-  /* 寮圭獥 */
+  /* 弹窗 */
   .mask { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none;
     z-index: 50; padding: 16px; overflow-y: auto;
     -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
@@ -81,9 +81,9 @@
     font-size: 12.5px; text-align: left; white-space: pre-wrap; color: #334155; margin-bottom: 14px; }
   .row { display: flex; gap: 10px; justify-content: center; }
   #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; display: none; }
-  /* 甯姪 */
+  /* 帮助 */
   .modal.help { width: min(700px, 100%); margin: 3vh auto; text-align: left;
-    transform: translateZ(0); }   /* 鍗曠嫭鍚堟垚灞傦細鎵嬫満涓婃粴鍔ㄦ洿椤?*/
+    transform: translateZ(0); }   /* 单独合成层：手机上滚动更顺 */
   .modal.help h2 { text-align: center; margin-bottom: 4px; }
   .modal.help h3 { font-size: 14px; margin: 16px 0 8px; color: #111827; }
   .modal.help p { font-size: 13px; color: #374151; margin: 6px 0; }
@@ -98,117 +98,120 @@
 </style>
 </head>
 <body>
-  <h1>鏁板洖 路 姣忔棩涓€棰?/h1>
-  <div class="sub" id="sub">姝ｅ湪杞藉叆浠婂ぉ鐨勯鐩€?/div>
+  <h1>数回 · 每日一题</h1>
+  <div class="sub" id="sub">正在载入今天的题目…</div>
 
   <div class="panel">
     <div class="bar">
       <span class="modes" id="modes">
-        <button class="on" data-mode="normal">鏅€?/button>
-        <button data-mode="fun">瓒ｅ懗</button>
+        <button class="on" data-mode="normal">普通</button>
+        <button data-mode="fun">趣味</button>
       </span>
-      <span>棰樺彿 <b id="no">鈥?/b></span>
-      <span id="date">鈥?/span>
+      <span>题号 <b id="no">—</b></span>
+      <span id="date">—</span>
       <span id="info"></span>
-      <button id="helpBtn" style="padding:3px 10px">甯姪</button>
-      <button id="shareBtn" style="display:none;padding:3px 10px">鍒嗕韩鎴愮哗</button>
+      <button id="helpBtn" style="padding:3px 10px">帮助</button>
+      <button id="shareBtn" style="display:none;padding:3px 10px">分享成绩</button>
       <span id="clock">0:00</span>
     </div>
     <div class="target" id="target">
-      <span class="glyph" id="glyph">鈥?/span>
+      <span class="glyph" id="glyph">—</span>
     </div>
     <div class="stage"><svg id="board"></svg></div>
     <div class="legend">
-      <span><i style="color:var(--warn)">姗?/i>绾垮皯浜?/span>
-      <span><i style="color:var(--ok)">缁?/i>鍒氬ソ</span>
-      <span><i style="color:var(--bad)">绾?/i>绾垮浜?/span>
-      <span><button id="clear" style="padding:2px 10px;margin-left:4px">娓呯┖閲嶆潵</button></span>
+      <span><i style="color:var(--warn)">橙</i>线少了</span>
+      <span><i style="color:var(--ok)">绿</i>刚好</span>
+      <span><i style="color:var(--bad)">红</i>线多了</span>
+      <span><button id="clear" style="padding:2px 10px;margin-left:4px">清空重来</button></span>
     </div>
   </div>
 
   <div class="mask" id="helpMask">
     <div class="modal help">
-      <h2>鏁板洖鎬庝箞鐜?/h2>
-      <p>鎶婃牸瀛愰噷鐨勬暟瀛楀叏閮ㄦ弧瓒筹紝<b>骞朵笖绾胯繛鎴愪竴鏉￠棴鍚堛€佷笉浜ゅ弶銆佷笉鍒嗗弶鐨勭幆</b>锛屾墠绠楀畬鎴愩€?/p>
+      <h2>数回怎么玩</h2>
+      <p>把格子里的数字全部满足，<b>并且线连成一条闭合、不交叉、不分叉的环</b>，才算完成。</p>
 
-      <h3>鈶?鍏堣璇嗘暟瀛楋細鏁板瓧锛濊繖涓牸瀛愬洓鏉¤竟閲岀敾浜嗗嚑鏉?/h3>
+      <h3>① 先认识数字：数字＝这个格子四条边里画了几条</h3>
       <div class="figs">
-        <figure><div id="hd0"></div><figcaption>鍐欑潃 <b>0</b>锛氬洓鏉¤竟涓€鏉￠兘涓嶇敾</figcaption></figure>
-        <figure><div id="hd1"></div><figcaption>鍐欑潃 <b>1</b>锛氬洓鏉¤竟閲岀敾 1 鏉?/figcaption></figure>
-        <figure><div id="hd2"></div><figcaption>鍐欑潃 <b>2</b>锛氬洓鏉¤竟閲岀敾 2 鏉?/figcaption></figure>
-        <figure><div id="hd3"></div><figcaption>鍐欑潃 <b>3</b>锛氬洓鏉¤竟閲岀敾 3 鏉?/figcaption></figure>
+        <figure><div id="hd0"></div><figcaption>写着 <b>0</b>：四条边一条都不画</figcaption></figure>
+        <figure><div id="hd1"></div><figcaption>写着 <b>1</b>：四条边里画 1 条</figcaption></figure>
+        <figure><div id="hd2"></div><figcaption>写着 <b>2</b>：四条边里画 2 条</figcaption></figure>
+        <figure><div id="hd3"></div><figcaption>写着 <b>3</b>：四条边里画 3 条</figcaption></figure>
       </div>
-      <p>娌℃湁鏁板瓧鐨勬牸瀛愪笉鍙楅檺鍒躲€傛暟瀛楅鑹蹭細瀹炴椂鎻愮ず锛?        <span style="color:var(--warn)">姗?/span>锛濊繖涓牸瀛愮殑绾垮お灏戜簡 路
-        <span style="color:var(--ok)">缁?/span>锛濆垰濂?路 <span style="color:var(--bad)">绾?/span>锛濈嚎澶浜?/p>
+      <p>没有数字的格子不受限制。数字颜色会实时提示：
+        <span style="color:var(--warn)">橙</span>＝这个格子的线太少了 ·
+        <span style="color:var(--ok)">绿</span>＝刚好 · <span style="color:var(--bad)">红</span>＝线太多了</p>
 
-      <h3>鈶?鍐嶈璇嗙幆锛氬繀椤绘槸涓€鏉￠棴鍚堛€佷笉浜ゅ弶銆佷笉鍒嗗弶鐨勭幆</h3>
-      <p>涓嬮潰浜斿紶鍥炬槸<b>鍚屼竴涓?5脳5 鐩橀潰</b>锛屽彧鏈夌嚎涓嶄竴鏍?鈥斺€?娉ㄦ剰鐪嬶細
-        <b>鍚庡洓寮犻敊鐨勫浘锛? 涓暟瀛椾篃鍏ㄦ槸缁跨殑</b>锛屽厜瀵规暟瀛楁槸涓嶅鐨勩€?/p>
+      <h3>② 再认识环：必须是一条闭合、不交叉、不分叉的环</h3>
+      <p>下面五张图是<b>同一个 5×5 盘面</b>，只有线不一样 —— 注意看：
+        <b>后四张错的图，9 个数字也全是绿的</b>，光对数字是不够的。</p>
       <div class="figs">
         <figure><div id="hx_ok"></div>
-          <figcaption>鉁?<b>姝ｇ‘</b>锛氫竴鏉￠棴鍚堢殑鐜紝9 涓暟瀛楀叏瀵逛笂</figcaption></figure>
+          <figcaption>✅ <b>正确</b>：一条闭合的环，9 个数字全对上</figcaption></figure>
         <figure><div id="hx_two"></div>
-          <figcaption>鉂?<b>鍒嗘垚涓や釜鐜?/b>锛氬繀椤绘槸<b>涓€鏉?/b>锛堣繖寮犳槸 1 涓皬鐜?+ 1 涓ぇ鐜級</figcaption></figure>
+          <figcaption>❌ <b>分成两个环</b>：必须是<b>一条</b>（这张是 1 个小环 + 1 个大环）</figcaption></figure>
         <figure><div id="hx_fork"></div>
-          <figcaption>鉂?<b>绾垮垎鍙?/b>锛氫竴涓偣涓婃帴浜嗕笁/鍥涙潯绾匡紙姣忎釜鐐规渶澶氫袱鏉★級</figcaption></figure>
+          <figcaption>❌ <b>线分叉</b>：一个点上接了三/四条线（每个点最多两条）</figcaption></figure>
         <figure><div id="hx_broken"></div>
-          <figcaption>鉂?<b>鏈夋柇澶?/b>锛氱嚎鏈夌鐐癸紝鎺ヤ笉鎴愪竴涓幆</figcaption></figure>
+          <figcaption>❌ <b>有断头</b>：线有端点，接不成一个环</figcaption></figure>
         <figure><div id="hx_cross"></div>
-          <figcaption>鉂?<b>鑷繁浜ゅ弶</b>锛氱幆鍦ㄥ悓涓€涓偣涓婄┛杩囧幓涓ゆ锛岃嚜浜や簡</figcaption></figure>
+          <figcaption>❌ <b>自己交叉</b>：环在同一个点上穿过去两次，自交了</figcaption></figure>
       </div>
 
-      <h3>鈶?鎬庝箞鎿嶄綔</h3>
+      <h3>③ 怎么操作</h3>
       <p>
-        路 <b>鐢荤嚎</b>锛氫粠涓€涓牸瀛愪腑蹇?b>鎷?/b>鍒扮浉閭绘牸瀛愪腑蹇冿紝涓ょ偣涔嬮棿灏辫繛涓婁簡锛涘啀鎷栦竴閬嶅氨鎿︽帀<br>
-        路 <b>鎵撳弶</b>锛?b>鐐?/b>閭ｄ竴鏉¤竟鍗冲彲锛堢數鑴戜篃鍙互<b>鍙抽敭</b>鐐规垨鎸変綇鎷栵紝鎵嬫満<b>闀挎寜</b>锛?br>
-        路 鎵撳弶鍙槸鏍囪銆岃繖鏉′竴瀹氫笉鐢汇€嶏紝甯綘鎺掗櫎锛屼笉绠楅敊
+        · <b>画线</b>：从一个格子中心<b>拖</b>到相邻格子中心，两点之间就连上了；再拖一遍就擦掉<br>
+        · <b>打叉</b>：<b>点</b>那一条边即可（电脑也可以<b>右键</b>点或按住拖，手机<b>长按</b>）<br>
+        · 打叉只是标记「这条一定不画」，帮你排除，不算错
       </p>
 
       <div class="row" style="margin-top:16px">
-        <button class="primary" id="helpClose">鐭ラ亾浜嗭紝寮€濮嬬帺</button>
+        <button class="primary" id="helpClose">知道了，开始玩</button>
       </div>
     </div>
   </div>
 
   <div class="mask" id="funMask">
     <div class="modal help">
-      <h2>瓒ｅ懗妯″紡鎬庝箞鐜?/h2>
-      <p><b>鏁板瓧瑙勫垯鍜屾櫘閫氭ā寮忓畬鍏ㄤ竴鏍?/b>锛氭暟瀛楋紳杩欎釜鏍煎瓙鍥涙潯杈圭敾浜嗗嚑鏉°€?        涓嶄竴鏍风殑鍙湁鏈€鍚庝竴姝?鈥斺€?绾胯鐢绘垚<b>鍜屽綋澶╅偅涓瓧鍚屾瀯鐨勫浘褰?/b>銆?/p>
-      <p>銆屽悓鏋勩€嶅彧鐪嬩笁浠朵簨锛?b>鍒嗗嚑绗?路 鍦ㄥ摢鍒嗗弶 路 鎴愪笉鎴愬湀</b>銆?        鐢诲澶с€佺敾鍦ㄥ摢銆佹€庝箞鎷愬集閮介殢渚裤€?/p>
+      <h2>趣味模式怎么玩</h2>
+      <p><b>数字规则和普通模式完全一样</b>：数字＝这个格子四条边画了几条。
+        不一样的只有最后一步 —— 线要画成<b>和当天那个字同构的图形</b>。</p>
+      <p>「同构」只看三件事：<b>分几笔 · 在哪分叉 · 成不成圈</b>。
+        画多大、画在哪、怎么拐弯都随便。</p>
 
-      <h3>鍚屾牱绠椼€屾棩銆嶏細涓€涓幆 + 涓€鏉℃潬锛屽舰鐘堕殢渚?/h3>
+      <h3>同样算「日」：一个环 + 一条杠，形状随便</h3>
       <div class="figs">
-        <figure><div id="fy_ok1"></div><figcaption>鉁?涓€涓幆 + 涓€鏉℃潬</figcaption></figure>
-        <figure><div id="fy_ok2"></div><figcaption>鉁?鎹竴绉嶅畬鍏ㄤ笉鍚岀殑褰㈢姸锛岀収鏍锋槸銆岀幆 + 涓€鏉℃潬銆?/figcaption></figure>
+        <figure><div id="fy_ok1"></div><figcaption>✅ 一个环 + 一条杠</figcaption></figure>
+        <figure><div id="fy_ok2"></div><figcaption>✅ 换一种完全不同的形状，照样是「环 + 一条杠」</figcaption></figure>
       </div>
 
-      <h3>杩欎袱绉嶄笉绠椼€屾棩銆?/h3>
+      <h3>这两种不算「日」</h3>
       <div class="figs">
-        <figure><div id="fy_bad1"></div><figcaption>鉂?鍙湁涓€鏉＄幆锛屾病鏈夋潬锛堝皯涓€涓笁宀旂偣锛?/figcaption></figure>
-        <figure><div id="fy_bad2"></div><figcaption>鉂?鏂垚浜掍笉鐩歌繛鐨勪袱绗旓紙鍒嗘垚涓ゅ潡浜嗭級</figcaption></figure>
+        <figure><div id="fy_bad1"></div><figcaption>❌ 只有一条环，没有杠（少一个三岔点）</figcaption></figure>
+        <figure><div id="fy_bad2"></div><figcaption>❌ 断成互不相连的两笔（分成两块了）</figcaption></figure>
       </div>
 
-      <h3>鎿嶄綔</h3>
+      <h3>操作</h3>
       <p>
-        路 <b>鐢荤嚎</b>锛氫粠涓€涓牸瀛愪腑蹇?b>鎷?/b>鍒扮浉閭绘牸瀛愪腑蹇冿紙鍐嶆嫋涓€閬嶏紳鎿︽帀锛夛紱<b>鎵撳弶</b>锛?b>鐐?/b>閭ｆ潯杈?br>
-        路 鏁板瓧棰滆壊锛氭锛濊繖涓牸瀛愮殑绾垮皯浜?路 缁匡紳鍒氬ソ 路 绾紳澶氫簡
+        · <b>画线</b>：从一个格子中心<b>拖</b>到相邻格子中心（再拖一遍＝擦掉）；<b>打叉</b>：<b>点</b>那条边<br>
+        · 数字颜色：橙＝这个格子的线少了 · 绿＝刚好 · 红＝多了
       </p>
 
       <div class="row" style="margin-top:16px">
-        <button class="primary" id="funHelpClose">鐭ラ亾浜嗭紝寮€濮嬬帺</button>
+        <button class="primary" id="funHelpClose">知道了，开始玩</button>
       </div>
     </div>
   </div>
 
   <div class="mask" id="mask">
     <div class="modal">
-      <div class="big">馃帀</div>
-      <h2>瀹屾垚浠婃棩棰樼洰锛?/h2>
+      <div class="big">🎉</div>
+      <h2>完成今日题目！</h2>
       <div class="meta" id="modalMeta"></div>
       <div class="sharetext" id="shareText"></div>
       <div class="row">
-        <button class="primary" id="share">鍒嗕韩</button>
-        <button id="closeModal">鍏抽棴</button>
+        <button class="primary" id="share">分享</button>
+        <button id="closeModal">关闭</button>
       </div>
     </div>
   </div>
@@ -219,8 +222,10 @@
 (function () {
   'use strict';
   var NS = 'http://www.w3.org/2000/svg';
-  // 鎺ュ彛鍦板潃锛氳嚜宸辨湇鍔″櫒涓婃槸鍚屾簮鐩稿璺緞锛涙斁鍒?GitHub Pages锛坔ttps锛変笂鏃讹紝
-  // 鍚屾簮閭ｆ潯浼?404锛屼簬鏄嚜鍔ㄥ垏鍒板浐瀹氬煙鍚嶇殑 HTTPS锛圠et's Encrypt 璇佷功锛岃嚜鍔ㄧ画鏈燂級銆?  // 鏈€鍚庨偅鏉?Cloudflare 涓存椂闅ч亾鍙槸鍏滃簳锛屽煙鍚嶄細鍙橈紝鍙互涓嶇銆?  var API_BASES = [
+  // 接口地址：自己服务器上是同源相对路径；放到 GitHub Pages（https）上时，
+  // 同源那条会 404，于是自动切到固定域名的 HTTPS（Let's Encrypt 证书，自动续期）。
+  // 最后那条 Cloudflare 临时隧道只是兜底，域名会变，可以不管。
+  var API_BASES = [
     '/slitherlink/api/',
     'https://2402-4e00-c050-e00-92ca-6506-e624-0.sslip.io/slitherlink/api/',
     'https://sacramento-divided-makers-gage.trycloudflare.com/slitherlink/api/'
@@ -238,21 +243,22 @@
   var downPt = null, movedFar = false, longPressed = false, pressTimer = null, lastPtrType = 'mouse';
   var solved = false, checking = false;
   var meta = null, elapsedDone = 0;
-  var puzzleMode = 'normal';                    // normal 鏅€?/ fun 瓒ｅ懗
+  var puzzleMode = 'normal';                    // normal 普通 / fun 趣味
   var elapsedMs = 0, running = false, runFrom = 0, started = false;
 
   function el(t, a) { var e = document.createElementNS(NS, t); for (var k in a) e.setAttribute(k, a[k]); return e; }
   function toast(msg) { toastEl.textContent = msg; toastEl.classList.add('show');
     clearTimeout(toast._t); toast._t = setTimeout(function () { toastEl.classList.remove('show'); }, 1800); }
 
-  /** 鍒嗕韩鐢ㄧ殑鍦板潃锛氬氨鏄?褰撳墠杩欎釜椤甸潰"鐨勫湴鍧€锛堝幓鎺夋煡璇覆锛夆€斺€?   *  鍦ㄦ湇鍔″櫒涓婃槸閭ｄ釜 IP 缃戝潃锛屽湪 GitHub Pages 涓婂氨鏄偅涓煭缃戝潃銆?*/
+  /** 分享用的地址：就是"当前这个页面"的地址（去掉查询串）——
+   *  在服务器上是那个 IP 网址，在 GitHub Pages 上就是那个短网址。 */
   function prettyUrl() {
     var p = location.pathname.replace(/index\.html?$/i, '');
     if (p.slice(-1) !== '/') p += '/';
     return location.origin + p;
   }
 
-  /** 渚濇鎺㈡祴鍊欓€夋帴鍙ｏ紝鎸戠涓€涓€氱殑锛圙itHub Pages 鐗堥潬杩欎釜鑷姩鍒囧埌闅ч亾锛?*/
+  /** 依次探测候选接口，挑第一个通的（GitHub Pages 版靠这个自动切到隧道） */
   function pickApi(done) {
     var i = 0;
     (function next() {
@@ -267,7 +273,7 @@
     })();
   }
 
-  // ---------------- 鍑犱綍锛堝拰涓婚〉闈竴鑷达紝浣嗕笉鍚眰瑙ｅ櫒锛?----------------
+  // ---------------- 几何（和主页面一致，但不含求解器） ----------------
   function cellEdges(i) {
     var r = Math.floor(i / C), c = i % C;
     return [r * C + c, (r + 1) * C + c, nh + r * (C + 1) + c, nh + r * (C + 1) + c + 1];
@@ -301,7 +307,7 @@
              frame: [fx0, fy0, (C + 1) * S, (R + 1) * S] };
   }
 
-  // ---------------- 娓叉煋 ----------------
+  // ---------------- 渲染 ----------------
   function render() {
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     edgeNodes = []; clueNodes = {};
@@ -380,7 +386,7 @@
 
   function syncColors() { clueCounts(); }
 
-  // ---------------- 鍧愭爣 ----------------
+  // ---------------- 坐标 ----------------
   function toLocal(ev) {
     var r = svg.getBoundingClientRect();
     return { x: (ev.clientX - r.left) * (geom.W / r.width),
@@ -483,7 +489,7 @@
     }
     painting = false; dragFrom = -1; strokeMode = null; crossMode = null;
     downPt = null; movedFar = false; longPressed = false; mode = 'line';
-    if (lastPtrType === 'touch' && hotDotEl) {      // 鎵嬫満涓婃姮鎵嬪氨鏀舵帀楂樹寒
+    if (lastPtrType === 'touch' && hotDotEl) {      // 手机上抬手就收掉高亮
       hotDotEl.setAttribute('cx', -999);
       hotDotEl.setAttribute('cy', -999);
     }
@@ -496,28 +502,32 @@
   svg.addEventListener('pointercancel', endPaint);
   svg.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
 
-  // ---------------- 璁℃椂 ----------------
+  // ---------------- 计时 ----------------
   function fmt(ms) {
     var s = Math.max(0, Math.floor(ms / 1000));
     var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
     return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(ss).padStart(2, '0');
   }
-  function startKey() { return 'sl-time-' + puzzleMode + '-' + meta.date; }  // 瀛樼殑鏄€岀疮璁℃绉掋€?  function doneKey() { return 'sl-done-' + puzzleMode + '-' + meta.date; }
-  function tickIn() {                       // 鎶婂綋鍓嶈繖娈靛彲瑙佹椂闂寸粨绠楁帀
+  function startKey() { return 'sl-time-' + puzzleMode + '-' + meta.date; }  // 存的是「累计毫秒」
+  function doneKey() { return 'sl-done-' + puzzleMode + '-' + meta.date; }
+  function tickIn() {                       // 把当前这段可见时间结算掉
     if (running) { elapsedMs += Date.now() - runFrom; running = false; }
   }
-  function startRun() {                     // 寮€濮嬩竴娈靛彲瑙佹椂闂?    if (!started || solved || running || document.hidden) return;
+  function startRun() {                     // 开始一段可见时间
+    if (!started || solved || running || document.hidden) return;
     running = true; runFrom = Date.now();
   }
   function saveElapsed() {
     try { localStorage.setItem(startKey(), String(Math.round(elapsedMs))); } catch (e) {}
   }
   function currentMs() { return elapsedMs + (running ? Date.now() - runFrom : 0); }
-  function touchTimer() {                   // 绗竴娆¤Е纰版鐩樻墠寮€濮嬭鏃?    if (!started) started = true;
+  function touchTimer() {                   // 第一次触碰棋盘才开始计时
+    if (!started) started = true;
     startRun();
   }
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { tickIn(); saveElapsed(); }   // 鍒囧悗鍙?閿佸睆 -> 鏆傚仠骞跺瓨鐩?    else startRun();                                    // 鍥炲埌鍓嶅彴 -> 缁х画
+    if (document.hidden) { tickIn(); saveElapsed(); }   // 切后台/锁屏 -> 暂停并存盘
+    else startRun();                                    // 回到前台 -> 继续
   });
   window.addEventListener('pagehide', function () { tickIn(); saveElapsed(); });
   window.addEventListener('beforeunload', function () { tickIn(); saveElapsed(); });
@@ -526,10 +536,11 @@
     document.getElementById('clock').textContent = fmt(solved ? elapsedDone : currentMs());
   }, 500);
 
-  // ---------------- 鏍￠獙 ----------------
+  // ---------------- 校验 ----------------
   function maybeCheck() {
     if (solved || checking || !meta) return;
-    if (clueCounts() !== 0) return;          // 鏁板瓧杩樻病鍏ㄥ涓?    checking = true;
+    if (clueCounts() !== 0) return;          // 数字还没全对上
+    checking = true;
     var edges = [];
     for (var e = 0; e < E; e++) if (user[e] === 1) edges.push(e);
     var body = { edges: edges, mode: puzzleMode };
@@ -538,19 +549,20 @@
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     }).then(function (r) { return r.json(); }).then(function (d) {
-      if (modeAtSend !== puzzleMode) return;   // 涓€斿垏浜嗘ā寮忥紝缁撴灉浣滃簾
+      if (modeAtSend !== puzzleMode) return;   // 中途切了模式，结果作废
       checking = false;
       if (d.ok) win();
       else if (modeAtSend === 'fun')
-        toast('鏁板瓧閮藉浜嗭紝浣嗙嚎瑕佹嫾鎴愩€? + (meta.shape || '鐩爣') + '銆嶇殑褰㈢姸鎵嶇畻瀹屾垚鍝?);
-      else toast('鏁板瓧閮藉浜嗭紝浣嗙嚎瑕佽繛鎴愪竴涓畬鏁寸殑鐜墠绠楀畬鎴愬摝');
+        toast('数字都对了，但线要拼成「' + (meta.shape || '目标') + '」的形状才算完成哦');
+      else toast('数字都对了，但线要连成一个完整的环才算完成哦');
     }).catch(function () { checking = false; });
   }
 
   function win() {
     if (solved) return;
     solved = true;
-    tickIn();                                   // 缁撶畻鏈€鍚庝竴娈?    elapsedDone = elapsedMs;
+    tickIn();                                   // 结算最后一段
+    elapsedDone = elapsedMs;
     saveElapsed();
     try { localStorage.setItem(doneKey(), JSON.stringify({ ms: elapsedDone, at: new Date().toISOString() })); } catch (e) {}
     document.getElementById('clock').textContent = fmt(elapsedDone);
@@ -559,20 +571,20 @@
     showModal();
   }
 
-  // ---------------- 寮圭獥 / 鍒嗕韩 ----------------
+  // ---------------- 弹窗 / 分享 ----------------
   function shareText() {
-    var tag = (puzzleMode === 'fun' && meta.shape) ? ' 路 瓒ｅ懗銆? + meta.shape + '銆? : '';
-    return '馃З 鏁板洖 路 姣忔棩涓€棰?#' + meta.index + tag + '\n' +
-           '鉁?浠婂ぉ閫氬叧鍟︼紒鐢ㄦ椂 ' + fmt(elapsedDone) + '\n' +
-           '馃搮 ' + meta.date + ' ' + meta.week + ' 路 ' + meta.rows + '脳' + meta.cols + '\n' +
+    var tag = (puzzleMode === 'fun' && meta.shape) ? ' · 趣味「' + meta.shape + '」' : '';
+    return '🧩 数回 · 每日一题 #' + meta.index + tag + '\n' +
+           '✅ 今天通关啦！用时 ' + fmt(elapsedDone) + '\n' +
+           '📅 ' + meta.date + ' ' + meta.week + ' · ' + meta.rows + '×' + meta.cols + '\n' +
            meta.siteUrl;
   }
   function showModal() {
     document.getElementById('modalMeta').innerHTML =
       '<b>Daily Slitherlink #' + meta.index + '</b>' +
-      (puzzleMode === 'fun' && meta.shape ? ' 路 瓒ｅ懗銆? + meta.shape + '銆? : '') + '<br>' +
-      meta.date + '锛? + meta.week + '锛壜?' + meta.rows + '脳' + meta.cols + '<br>' +
-      '鐢ㄦ椂 <b>' + fmt(elapsedDone) + '</b>';
+      (puzzleMode === 'fun' && meta.shape ? ' · 趣味「' + meta.shape + '」' : '') + '<br>' +
+      meta.date + '（' + meta.week + '）· ' + meta.rows + '×' + meta.cols + '<br>' +
+      '用时 <b>' + fmt(elapsedDone) + '</b>';
     document.getElementById('shareText').textContent = shareText();
     mask.classList.add('show');
   }
@@ -585,12 +597,12 @@
       var ta = document.createElement('textarea');
       ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
       document.body.appendChild(ta); ta.select();
-      try { document.execCommand('copy'); toast('宸插鍒跺埌鍓创鏉?); }
-      catch (e) { toast('澶嶅埗澶辫触锛岄暱鎸変笂闈㈤偅娈垫枃瀛楀惂'); }
+      try { document.execCommand('copy'); toast('已复制到剪贴板'); }
+      catch (e) { toast('复制失败，长按上面那段文字吧'); }
       document.body.removeChild(ta);
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(txt).then(function () { toast('宸插鍒跺埌鍓创鏉?); }, fallback);
+      navigator.clipboard.writeText(txt).then(function () { toast('已复制到剪贴板'); }, fallback);
     } else fallback();
   });
   document.getElementById('clear').addEventListener('click', function () {
@@ -598,7 +610,7 @@
     syncColors();
   });
 
-  // ---------------- 鎾掕姳 ----------------
+  // ---------------- 撒花 ----------------
   function confetti() {
     var cv = document.getElementById('confetti');
     var ctx = cv.getContext('2d');
@@ -631,16 +643,21 @@
     })();
   }
 
-  // ---------------- 甯姪锛氱敤鍚屼竴涓?5脳5 鐩橀潰鍥捐В瑙勫垯 ----------------
-  // 杩欎釜鐩橀潰鏄紩鎿庣敓鎴愬苟楠岃瘉杩囩殑锛涘洓涓緥瀛愰兘鍙敼绾裤€佷笉鏀规暟瀛?  var HELP_R = 5, HELP_C = 5, HELP_NH = (HELP_R + 1) * HELP_C;
+  // ---------------- 帮助：用同一个 5×5 盘面图解规则 ----------------
+  // 这个盘面是引擎生成并验证过的；四个例子都只改线、不改数字
+  var HELP_R = 5, HELP_C = 5, HELP_NH = (HELP_R + 1) * HELP_C;
   var HELP_CLUES = [[0,0,3],[0,1,3],[0,3,1],[0,4,0],[1,4,1],[2,1,0],[3,1,3],[3,4,3],[4,2,1]];
   var HELP_EX = {
-    // 姝ｈВ锛氬敮涓€瑙ｏ紝26 鏉¤竟
+    // 正解：唯一解，26 条边
     ok:     [0,2,6,13,14,15,17,19,21,24,28,29,30,31,32,33,36,39,42,47,49,50,51,52,57,59],
-    // 涓嬮潰鍥涘紶鏄?鏁板瓧鍏ㄥ浣嗛兘涓嶅悎娉?鐨勫弽渚?    two:    [0,1,5,6,8,15,17,19,21,24,25,26,27,28,30,32,39,40,45,46,48,49,50,53,54,58],       // 涓や釜鐜?    fork:   [0,1,2,6,12,13,14,15,17,19,21,24,28,29,30,31,33,36,38,39,42,47,49,50,51,52,57,59], // 鏈夊垎鍙?    broken: [1,5,7,8,15,17,19,21,24,28,30,31,32,40,46,48,49,50,51,53,54,57,58],                // 鏈夋柇澶?    cross:  [0,1,5,6,7,8,12,15,17,19,21,24,25,26,27,28,30,32,38,40,45,46,48,49,50,53,54,58]    // 鑷繁浜ゅ弶
+    // 下面四张是"数字全对但都不合法"的反例
+    two:    [0,1,5,6,8,15,17,19,21,24,25,26,27,28,30,32,39,40,45,46,48,49,50,53,54,58],       // 两个环
+    fork:   [0,1,2,6,12,13,14,15,17,19,21,24,28,29,30,31,33,36,38,39,42,47,49,50,51,52,57,59], // 有分叉
+    broken: [1,5,7,8,15,17,19,21,24,28,30,31,32,40,46,48,49,50,51,53,54,57,58],                // 有断头
+    cross:  [0,1,5,6,7,8,12,15,17,19,21,24,25,26,27,28,30,32,38,40,45,46,48,49,50,53,54,58]    // 自己交叉
   };
 
-  // 瓒ｅ懗妯″紡鐨勭ず渚嬶細鍚屼竴涓€屾棩銆嶇殑涓ょ鐢绘硶锛堥兘鏄?7脳7 涓婂疄闄呴暱鍑烘潵鐨勫浘褰級锛屽鍔犱袱绉嶄笉绠楃殑
+  // 趣味模式的示例：同一个「日」的两种画法（都是 7×7 上实际长出来的图形），外加两种不算的
   var FUN_EX = {
     ok1:  [3,8,9,11,12,14,16,17,21,23,27,30,33,34,36,38,40,41,42,43,45,47,51,53,55,59,60,65,70,72,74,76,78,80,81,83,84,87,88,89,90,92,93,96,99,103,106,107,108,109,110,111],
     ok2:  [2,10,11,26,29,32,34,35,37,38,41,43,46,48,49,50,51,52,54,55,58,59,66,69,74,77,82,85,86,89,92,95,96,98,102,104,105,108,109,111],
@@ -648,8 +665,8 @@
     bad2: [0,1,14,15,40,41,54,55,56,58,64,66,101,103,109,111]
   };
 
-  /** 鎶婁竴涓?R脳C 鐩橀潰鐢绘垚灏忓浘锛堢敾娉曞拰鐪熷疄妫嬬洏涓€鑷达紝鏁板瓧鎸夋槸鍚﹀涓婄潃鑹诧級
-   *  缃戞牸绾垮悎骞舵垚涓€鏉?<path>锛屾墜鏈轰笂鍏冪礌灏戙€佹粴鍔ㄤ笉鍗?*/
+  /** 把一个 R×C 盘面画成小图（画法和真实棋盘一致，数字按是否对上着色）
+   *  网格线合并成一条 <path>，手机上元素少、滚动不卡 */
   function helpBoardFig(R, C, clues, edges, size, withNumbers) {
     var NH = (R + 1) * C;
     var size0 = size;
@@ -717,7 +734,7 @@
     return s;
   }
 
-  // 鈶?鏁板瓧绀烘剰锛? 涓崟鏍硷紝鍒嗗埆鐢?0/1/2/3 鏉¤竟
+  // ① 数字示意：4 个单格，分别画 0/1/2/3 条边
   var DIGIT_EDGES = {
     0: [],
     1: ['H0'],
@@ -725,7 +742,7 @@
     3: ['H0', 'H1', 'V0']
   };
   function helpDigitFig(n, size) {
-    var NH = 2;                                    // 1x1 妫嬬洏锛歯h = (1+1)*1 = 2
+    var NH = 2;                                    // 1x1 棋盘：nh = (1+1)*1 = 2
     var map = { H0: 0, H1: 1, V0: NH + 0 * 2 + 0 };
     var edges = DIGIT_EDGES[n].map(function (k) { return map[k]; });
     return helpBoardFig(1, 1, [[0, 0, n]], edges, size, true);
@@ -736,18 +753,19 @@
     if (helpBuilt) return;
     helpBuilt = true;
     var put = function (id, node) { var box = document.getElementById(id); if (box) box.appendChild(node); };
-    // 鈶?鏁板瓧
+    // ① 数字
     put('hd0', helpDigitFig(0, 46));
     put('hd1', helpDigitFig(1, 46));
     put('hd2', helpDigitFig(2, 46));
     put('hd3', helpDigitFig(3, 46));
-    // 鈶?鍥炶矾
+    // ② 回路
     put('hx_ok', helpBoardFig(HELP_R, HELP_C, HELP_CLUES, HELP_EX.ok, 44, true));
     put('hx_two', helpBoardFig(HELP_R, HELP_C, HELP_CLUES, HELP_EX.two, 40, true));
     put('hx_fork', helpBoardFig(HELP_R, HELP_C, HELP_CLUES, HELP_EX.fork, 40, true));
     put('hx_broken', helpBoardFig(HELP_R, HELP_C, HELP_CLUES, HELP_EX.broken, 40, true));
     put('hx_cross', helpBoardFig(HELP_R, HELP_C, HELP_CLUES, HELP_EX.cross, 40, true));
-    // 鈶?瓒ｅ懗妯″紡锛氬悓涓€妗ｇ殑涓ょ鐢绘硶 + 涓ょ涓嶇畻鐨?    put('fy_ok1', helpBoardFig(7, 7, null, FUN_EX.ok1, 30, false));
+    // ④ 趣味模式：同一档的两种画法 + 两种不算的
+    put('fy_ok1', helpBoardFig(7, 7, null, FUN_EX.ok1, 30, false));
     put('fy_ok2', helpBoardFig(7, 7, null, FUN_EX.ok2, 30, false));
     put('fy_bad1', helpBoardFig(7, 7, null, FUN_EX.bad1, 30, false));
     put('fy_bad2', helpBoardFig(7, 7, null, FUN_EX.bad2, 30, false));
@@ -775,7 +793,7 @@
     if (e.key === 'Escape') { helpMask.classList.remove('show'); funMask.classList.remove('show'); }
   });
 
-  // ---------------- 鍚姩 ----------------
+  // ---------------- 启动 ----------------
   function syncModeButtons() {
     var bs = document.querySelectorAll('#modes button');
     for (var i = 0; i < bs.length; i++) {
@@ -794,22 +812,25 @@
     tries = tries || 0;
     var m = puzzleMode;
     fetch(API + 'daily?mode=' + m).then(function (r) { return r.json(); }).then(function (d) {
-      if (m !== puzzleMode) return;              // 鏈熼棿鍒囦簡妯″紡锛屼綔搴?      if (d && d.warming) {                      // 鏈嶅姟鍣ㄦ鍦ㄧ敓鎴愪粖澶╃殑棰?        document.getElementById('sub').innerHTML = '<span class="spin"></span>' +
-          (m === 'fun' ? '瓒ｅ懗棰樼洰姝ｅ湪鐢熸垚锛堢涓€娆¤绠椾竴浼氬効锛夛紝璇风◢鍊欌€?
-                       : '浠婂ぉ鐨勯鐩鍦ㄧ敓鎴愶紝璇风◢鍊欌€?);
-        var cap = m === 'fun' ? 160 : 40;        // 瓒ｅ懗妯″紡鎱紝澶氱瓑涓€浼氬効
+      if (m !== puzzleMode) return;              // 期间切了模式，作废
+      if (d && d.warming) {                      // 服务器正在生成今天的题
+        document.getElementById('sub').innerHTML = '<span class="spin"></span>' +
+          (m === 'fun' ? '趣味题目正在生成（第一次要算一会儿），请稍候…'
+                       : '今天的题目正在生成，请稍候…');
+        var cap = m === 'fun' ? 160 : 40;        // 趣味模式慢，多等一会儿
         if (tries < cap) setTimeout(function () { if (m === puzzleMode) loadDaily(tries + 1); }, 3000);
-        else document.getElementById('sub').textContent = '鏈嶅姟鍣ㄨ繕鍦ㄧ畻锛岃繃涓€浼氬効鍒锋柊鐪嬬湅';
+        else document.getElementById('sub').textContent = '服务器还在算，过一会儿刷新看看';
         return;
       }
       if (!d || !d.clues) throw new Error(d && d.msg ? d.msg : 'no data');
       start(d);
     }).catch(function (e) {
       if (m !== puzzleMode) return;
-      if (tries < 5) {                           // 缃戠粶鎶栧姩锛氱瓑 2 绉掗噸璇?        setTimeout(function () { if (m === puzzleMode) loadDaily(tries + 1); }, 2000);
+      if (tries < 5) {                           // 网络抖动：等 2 秒重试
+        setTimeout(function () { if (m === puzzleMode) loadDaily(tries + 1); }, 2000);
         return;
       }
-      document.getElementById('sub').textContent = '棰樼洰杞藉叆澶辫触锛? + e.message + '锛堝埛鏂伴噸璇曪級';
+      document.getElementById('sub').textContent = '题目载入失败：' + e.message + '（刷新重试）';
     });
   }
 
@@ -822,8 +843,8 @@
     clue = {};
     d.clues.forEach(function (c) { clue[c[0] * C + c[1]] = c[2]; });
     document.getElementById('no').textContent = '#' + d.index;
-    document.getElementById('date').textContent = d.date + '锛? + d.week + '锛?;
-    document.getElementById('info').textContent = d.rows + '脳' + d.cols;
+    document.getElementById('date').textContent = d.date + '（' + d.week + '）';
+    document.getElementById('info').textContent = d.rows + '×' + d.cols;
     var targetEl = document.getElementById('target');
     if (puzzleMode === 'fun' && d.shape) {
       targetEl.classList.add('on');
@@ -834,17 +855,20 @@
     document.getElementById('sub').textContent = '';
     svg.style.visibility = 'visible';
     render();
-    openHelp(puzzleMode === 'fun' ? 'fun' : 'normal', false);   // 绗竴娆℃潵鍏堢湅涓€鐪艰鍒?    try {
+    openHelp(puzzleMode === 'fun' ? 'fun' : 'normal', false);   // 第一次来先看一眼规则
+    try {
       var done = localStorage.getItem(doneKey());
-      if (done) {                            // 浠婂ぉ宸插畬鎴愶細鍐荤粨鐢ㄦ椂锛屼笉鍐嶈鏃?        var o = JSON.parse(done);
+      if (done) {                            // 今天已完成：冻结用时，不再计时
+        var o = JSON.parse(done);
         solved = true; elapsedDone = o.ms || 0;
         document.getElementById('clock').textContent = fmt(elapsedDone);
-        document.getElementById('sub').textContent = '浠婂ぉ宸茬粡瀹屾垚鍟?鉁擄紙鐢ㄦ椂 ' + fmt(elapsedDone) + '锛?;
+        document.getElementById('sub').textContent = '今天已经完成啦 ✓（用时 ' + fmt(elapsedDone) + '）';
         document.getElementById('shareBtn').style.display = 'inline-block';
       }
       var s = localStorage.getItem(startKey());
       if (s) { elapsedMs = parseInt(s, 10) || 0; started = elapsedMs > 0; }
-      if (started && !solved) startRun();    // 涔嬪墠寮€濮嬭繃 -> 鐜板湪鍙灏辨帴鐫€璧?    } catch (e) {}
+      if (started && !solved) startRun();    // 之前开始过 -> 现在可见就接着走
+    } catch (e) {}
   }
 
   function switchMode(m) {
@@ -855,11 +879,12 @@
     resetState();
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     svg.style.visibility = 'hidden';
-    document.getElementById('no').textContent = '鈥?;
+    document.getElementById('no').textContent = '—';
     document.getElementById('info').textContent = '';
     document.getElementById('target').classList.remove('on');
     document.getElementById('sub').textContent = '';
-    if (m === 'fun') openHelp('fun', false);   // 绗竴娆¤繘瓒ｅ懗妯″紡锛氬崟鐙竴浠借鍒欒鏄?    loadDaily(0);
+    if (m === 'fun') openHelp('fun', false);   // 第一次进趣味模式：单独一份规则说明
+    loadDaily(0);
   }
 
   try {
@@ -871,9 +896,11 @@
   for (var mb = 0; mb < modeBtns.length; mb++) {
     modeBtns[mb].addEventListener('click', function () { switchMode(this.getAttribute('data-mode')); });
   }
-  // 鍏堟帰涓€涓嬪摢涓帴鍙ｆ槸閫氱殑锛堣嚜宸辨湇鍔″櫒璧板悓婧愶紝GitHub Pages 璧颁笂閭ｆ潯 https 闅ч亾锛?  pickApi(function (base) { API = base; loadDaily(0); });
+  // 先探一下哪个接口是通的（自己服务器走同源，GitHub Pages 走上那条 https 隧道）
+  pickApi(function (base) { API = base; loadDaily(0); });
 
-  // 瀹屾垚鐘舵€佷笅鎸変换鎰忛敭/鐐瑰嚮涓嶈Е鍙戣鏃?  window.addEventListener('keydown', function (e) { if (e.key === 'Escape') mask.classList.remove('show'); });
+  // 完成状态下按任意键/点击不触发计时
+  window.addEventListener('keydown', function (e) { if (e.key === 'Escape') mask.classList.remove('show'); });
 })();
 </script>
 </body>
