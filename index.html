@@ -539,22 +539,132 @@
     document.getElementById('clock').textContent = fmt(solved ? elapsedDone : currentMs());
   }, 500);
 
-  // ---------------- 校验 ----------------
-  // 答案只在服务端，这里只决定「什么时候问、问失败了怎么办」。三个坑都在这儿：
-  //   ① 上一次请求还在路上时玩家又落子 —— 那个结果针对的是旧盘面，不能拿来判通关；
-  //   ② 请求可能永远不回来（隧道/DNS 抖动）—— 必须设超时，超时当失败；
-  //   ③ 失败完全静默 —— 玩家明明做对了却什么都不发生，得给提示并接着试。
-  var CHECK_TIMEOUT_MS = 6000;                  // 单次校验最多等多久
-  var CHECK_RETRY_MS = [600, 1800, 4000];       // 失败后的重试间隔；次数用完就等玩家下次落子
+  // ---------------- 判定 ----------------
+  // 判定规则本身用不着答案，所以默认在本地算，画完最后一条线立刻出结果：
+  //   普通模式 = 数字全对 + 线是一条闭合、不交叉、不分叉的单环；
+  //   趣味模式 = 数字全对 + 线的拓扑签名跟目标字形一致（签名由 /api/daily 下发，不含答案）。
+  // 只有趣味模式拿不到目标签名时（接口还是旧版），才回退去问服务器。
+
+  /** 一条边的两个端点（格点编号 i*(C+1)+j） */
+  function edgeEnds(e) {
+    if (e < nh) {
+      var r0 = Math.floor(e / C), c0 = e % C, a0 = r0 * (C + 1) + c0;
+      return [a0, a0 + 1];
+    }
+    var k = e - nh, r1 = Math.floor(k / (C + 1)), c1 = k % (C + 1), a1 = r1 * (C + 1) + c1;
+    return [a1, a1 + (C + 1)];
+  }
+
+  /** 把画出来的线当图看：每个点的度数 + 连通分量（分量里带点集和边集） */
+  function lineGraph() {
+    var C1 = C + 1, ND = (R + 1) * C1;
+    var deg = new Int32Array(ND), comp = new Int32Array(ND).fill(-1);
+    var endA = new Int32Array(E).fill(-1), endB = new Int32Array(E).fill(-1);
+    var dotEdges = [], i, e, p, q;
+    for (i = 0; i < ND; i++) dotEdges.push([]);
+    for (e = 0; e < E; e++) {
+      if (user[e] !== 1) continue;
+      p = edgeEnds(e);
+      endA[e] = p[0]; endB[e] = p[1];
+      deg[p[0]]++; deg[p[1]]++;
+      dotEdges[p[0]].push(e); dotEdges[p[1]].push(e);
+    }
+    var comps = [];
+    for (var d0 = 0; d0 < ND; d0++) {
+      if (deg[d0] === 0 || comp[d0] >= 0) continue;
+      var id = comps.length, stack = [d0], pts = [d0], es = [], seen = {};
+      comp[d0] = id;
+      while (stack.length) {
+        var u = stack.pop(), list = dotEdges[u];
+        for (i = 0; i < list.length; i++) {
+          e = list[i];
+          if (!seen[e]) { seen[e] = 1; es.push(e); }
+          q = (endA[e] === u) ? endB[e] : endA[e];
+          if (comp[q] < 0) { comp[q] = id; stack.push(q); pts.push(q); }
+        }
+      }
+      comps.push({ pts: pts, es: es });
+    }
+    return { deg: deg, endA: endA, endB: endB, comps: comps };
+  }
+
+  /** 普通模式：每条线两端各接一个点，所以度数只能是 2（或 0），而且只能有一块 */
+  function isSingleLoop(g) {
+    if (g.comps.length !== 1) return false;
+    if (g.comps[0].es.length < 4) return false;
+    for (var d = 0; d < g.deg.length; d++) if (g.deg[d] !== 0 && g.deg[d] !== 2) return false;
+    return true;
+  }
+
+  /** 从格点 (px,py) 往右上斜着射线，穿过奇数条边 = 在里面（跟服务端 fun.js 同一套算法） */
+  function rayInside(px, py, es, endA, endB) {
+    var C1 = C + 1, dx = 1, dy = 0.37, cross = 0;
+    for (var i = 0; i < es.length; i++) {
+      var e = es[i], A = endA[e], B = endB[e];
+      var ax = A % C1, ay = (A - ax) / C1, bx = B % C1, by = (B - bx) / C1;
+      var cA = dx * (ay - py) - dy * (ax - px), cB = dx * (by - py) - dy * (bx - px);
+      if ((cA > 0) === (cB > 0)) continue;
+      var ex = bx - ax, ey = by - ay, den = dx * ey - dy * ex;
+      var t = ((ax - px) * ey - (ay - py) * ex) / den;
+      if (t > 0) cross++;
+    }
+    return (cross % 2) === 1;
+  }
+
+  function insideOf(g, idx) {
+    if (g.comps.length < 2) return false;
+    var C1 = C + 1, p0 = g.comps[idx].pts[0], px = p0 % C1, py = (p0 - px) / C1;
+    for (var j = 0; j < g.comps.length; j++) {
+      if (j === idx) continue;
+      if (rayInside(px, py, g.comps[j].es, g.endA, g.endB)) return true;
+    }
+    return false;
+  }
+
+  /** 拓扑签名：每个分量「三岔点:四岔点:环数:是否套在别人里面」，排序后拼起来 */
+  function topoSignature(g) {
+    var list = [];
+    for (var i = 0; i < g.comps.length; i++) {
+      var c = g.comps[i], d3 = 0, d4 = 0;
+      for (var k = 0; k < c.pts.length; k++) {
+        var d = g.deg[c.pts[k]];
+        if (d === 3) d3++; else if (d >= 4) d4++;
+      }
+      var r = c.es.length - c.pts.length + 1;
+      list.push(d3 + ':' + d4 + ':' + r + ':' + (insideOf(g, i) ? 1 : 0));
+    }
+    list.sort();
+    return list.join('|');
+  }
+
+  function localVerdict() {
+    var g = lineGraph();
+    if (puzzleMode === 'fun') return topoSignature(g) === meta.target;
+    return isSingleLoop(g);
+  }
+
+  function notYetToast() {
+    if (puzzleMode === 'fun')
+      toast('数字都对了，但线要拼成「' + (meta.shape || '目标') + '」的形状才算完成哦');
+    else toast('数字都对了，但线要连成一个完整的环才算完成哦');
+  }
 
   function maybeCheck() {
     if (solved || !meta) return;
     if (clueCounts() !== 0) return;          // 数字还没全对上
-    if (checking) return;                    // 上一次还没回来：等它回来会按最新盘面再看一遍
-    sendCheck();
+    if (puzzleMode === 'fun' && !meta.target) { remoteCheck(); return; }   // 旧接口：只能问服务器
+    if (localVerdict()) win();
+    else notYetToast();
   }
 
-  function sendCheck() {
+  // ---------------- 回退：问服务器（只在趣味模式没拿到目标签名时用） ----------------
+  // 异步的老坑：上一次请求还在路上时玩家又落子，它的结果针对的是旧盘面；
+  // 请求也可能永远不回来，所以要有超时和退避重试。
+  var CHECK_TIMEOUT_MS = 6000;                  // 单次校验最多等多久
+  var CHECK_RETRY_MS = [600, 1800, 4000];       // 失败后的重试间隔；次数用完就等玩家下次落子
+
+  function remoteCheck() {
+    if (checking) return;                    // 上一次还没回来：它回来会按最新盘面再看一遍
     checking = true;
     var ver = checkSeq;                      // 记下这次问的是哪一版盘面
     var edges = [];
@@ -569,15 +679,13 @@
       body: JSON.stringify(body), signal: ctrl ? ctrl.signal : undefined
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (modeAtSend !== puzzleMode) { finish(); return; }   // 中途切了模式，结果作废
-      if (checkSeq !== ver) {                                // 等待期间盘面变过：结果过期，按最新盘面重问
+      if (checkSeq !== ver) {                                // 等待期间盘面变过：结果过期，按最新盘面重判
         finish(); checkRetry = 0; maybeCheck(); return;
       }
       finish();
       if (d && d.ok) { checkRetry = 0; checkWarned = false; win(); return; }
       checkRetry = 0;
-      if (modeAtSend === 'fun')
-        toast('数字都对了，但线要拼成「' + (meta.shape || '目标') + '」的形状才算完成哦');
-      else toast('数字都对了，但线要连成一个完整的环才算完成哦');
+      notYetToast();
     }).catch(function () {                   // 超时 / 断网 / 服务端挂了
       finish();
       if (modeAtSend !== puzzleMode) return;
@@ -585,7 +693,7 @@
     });
   }
 
-  /** 校验没成功：只要盘面还停在「数字全对」的样子，就退避着再问几次 */
+  /** 回退路径问不到结果：只要盘面还停在「数字全对」的样子，就退避着再问几次 */
   function retryCheck() {
     if (solved || !meta || checking) return;
     if (clueCounts() !== 0) { checkRetry = 0; return; }   // 盘面已经不对数字了：等下次落子再问
