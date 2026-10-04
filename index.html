@@ -242,6 +242,7 @@
   var painting = false, dragFrom = -1, strokeMode = null, mode = 'line';
   var downPt = null, movedFar = false, longPressed = false, pressTimer = null, lastPtrType = 'mouse';
   var solved = false, checking = false;
+  var checkSeq = 0, checkRetry = 0, checkTimer = null, checkWarned = false;
   var meta = null, elapsedDone = 0;
   var puzzleMode = 'normal';                    // normal 普通 / fun 趣味
   var elapsedMs = 0, running = false, runFrom = 0, started = false;
@@ -312,6 +313,8 @@
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     edgeNodes = []; clueNodes = {};
     user = new Int8Array(E);
+    checkSeq++; checkRetry = 0; checkWarned = false;   // 换了一版盘面：正在飞的旧校验结果一律作废
+    clearTimeout(checkTimer); checkTimer = null;
     var S = Math.max(22, Math.min(62, Math.floor(560 / R)));
     var M = Math.round(S * 0.78);
     var L = layout(S, M);
@@ -430,7 +433,7 @@
   }
   function applyEdge(e, st) {
     if (e < 0 || user[e] === st) return;
-    user[e] = st; paint(e); syncColors(); maybeCheck();
+    user[e] = st; checkSeq++; paint(e); syncColors(); maybeCheck();
   }
   function toggleCross(e) { if (e >= 0) applyEdge(e, user[e] === 2 ? 0 : 2); }
 
@@ -537,38 +540,77 @@
   }, 500);
 
   // ---------------- 校验 ----------------
+  // 答案只在服务端，这里只决定「什么时候问、问失败了怎么办」。三个坑都在这儿：
+  //   ① 上一次请求还在路上时玩家又落子 —— 那个结果针对的是旧盘面，不能拿来判通关；
+  //   ② 请求可能永远不回来（隧道/DNS 抖动）—— 必须设超时，超时当失败；
+  //   ③ 失败完全静默 —— 玩家明明做对了却什么都不发生，得给提示并接着试。
+  var CHECK_TIMEOUT_MS = 6000;                  // 单次校验最多等多久
+  var CHECK_RETRY_MS = [600, 1800, 4000];       // 失败后的重试间隔；次数用完就等玩家下次落子
+
   function maybeCheck() {
-    if (solved || checking || !meta) return;
+    if (solved || !meta) return;
     if (clueCounts() !== 0) return;          // 数字还没全对上
+    if (checking) return;                    // 上一次还没回来：等它回来会按最新盘面再看一遍
+    sendCheck();
+  }
+
+  function sendCheck() {
     checking = true;
+    var ver = checkSeq;                      // 记下这次问的是哪一版盘面
     var edges = [];
     for (var e = 0; e < E; e++) if (user[e] === 1) edges.push(e);
-    var body = { edges: edges, mode: puzzleMode };
+    var body = { edges: edges, mode: puzzleMode, date: meta.date };
     var modeAtSend = puzzleMode;
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, CHECK_TIMEOUT_MS);
+    function finish() { clearTimeout(timer); checking = false; }
     fetch(API + 'check', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body), signal: ctrl ? ctrl.signal : undefined
     }).then(function (r) { return r.json(); }).then(function (d) {
-      if (modeAtSend !== puzzleMode) return;   // 中途切了模式，结果作废
-      checking = false;
-      if (d.ok) win();
-      else if (modeAtSend === 'fun')
+      if (modeAtSend !== puzzleMode) { finish(); return; }   // 中途切了模式，结果作废
+      if (checkSeq !== ver) {                                // 等待期间盘面变过：结果过期，按最新盘面重问
+        finish(); checkRetry = 0; maybeCheck(); return;
+      }
+      finish();
+      if (d && d.ok) { checkRetry = 0; checkWarned = false; win(); return; }
+      checkRetry = 0;
+      if (modeAtSend === 'fun')
         toast('数字都对了，但线要拼成「' + (meta.shape || '目标') + '」的形状才算完成哦');
       else toast('数字都对了，但线要连成一个完整的环才算完成哦');
-    }).catch(function () { checking = false; });
+    }).catch(function () {                   // 超时 / 断网 / 服务端挂了
+      finish();
+      if (modeAtSend !== puzzleMode) return;
+      retryCheck();
+    });
+  }
+
+  /** 校验没成功：只要盘面还停在「数字全对」的样子，就退避着再问几次 */
+  function retryCheck() {
+    if (solved || !meta || checking) return;
+    if (clueCounts() !== 0) { checkRetry = 0; return; }   // 盘面已经不对数字了：等下次落子再问
+    if (checkRetry >= CHECK_RETRY_MS.length) {
+      if (!checkWarned) { checkWarned = true; toast('网络不太顺，校验没成功 —— 再动一下棋盘就会重试'); }
+      return;
+    }
+    var delay = CHECK_RETRY_MS[checkRetry++];
+    clearTimeout(checkTimer);
+    checkTimer = setTimeout(function () { checkTimer = null; maybeCheck(); }, delay);
   }
 
   function win() {
     if (solved) return;
     solved = true;
+    checking = false;
+    clearTimeout(checkTimer); checkTimer = null;
     tickIn();                                   // 结算最后一段
     elapsedDone = elapsedMs;
     saveElapsed();
     try { localStorage.setItem(doneKey(), JSON.stringify({ ms: elapsedDone, at: new Date().toISOString() })); } catch (e) {}
     document.getElementById('clock').textContent = fmt(elapsedDone);
     document.getElementById('shareBtn').style.display = 'inline-block';
-    confetti();
-    showModal();
+    showModal();                                // 先把通关弹窗放出来
+    try { confetti(); } catch (e) {}            // 撒花只是锦上添花，炸了也不能挡住通关
   }
 
   // ---------------- 弹窗 / 分享 ----------------
@@ -606,7 +648,10 @@
     } else fallback();
   });
   document.getElementById('clear').addEventListener('click', function () {
+    clearTimeout(checkTimer); checkTimer = null;
+    checkRetry = 0; checkWarned = false;
     for (var e = 0; e < E; e++) { user[e] = 0; paint(e); }
+    checkSeq++;
     syncColors();
   });
 
@@ -804,6 +849,8 @@
   function resetState() {
     solved = false; checking = false; started = false; running = false;
     elapsedMs = 0; elapsedDone = 0; runFrom = 0;
+    checkSeq++; checkRetry = 0; checkWarned = false;
+    clearTimeout(checkTimer); checkTimer = null;
     document.getElementById('clock').textContent = '0:00';
     document.getElementById('shareBtn').style.display = 'none';
   }
